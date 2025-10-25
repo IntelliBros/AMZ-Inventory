@@ -177,9 +177,6 @@ function Dashboard({ inventory, products, purchaseOrders, salesRecords, warehous
             <div>
               <p className="text-sm font-medium text-gray-600">Total Products</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalProducts}</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Avg cost: ${stats.avgProductCost.toFixed(2)}
-              </p>
             </div>
           </div>
         </div>
@@ -189,9 +186,6 @@ function Dashboard({ inventory, products, purchaseOrders, salesRecords, warehous
             <div>
               <p className="text-sm font-medium text-gray-600">Purchase Orders</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">{stats.activePOs}</p>
-              <p className="text-sm text-gray-500 mt-1">
-                {stats.completedPOs} completed
-              </p>
             </div>
           </div>
         </div>

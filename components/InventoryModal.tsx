@@ -67,8 +67,10 @@ export default function InventoryModal({ inventory, products, onClose }: Invento
     try {
       if (inventory) {
         // Update existing inventory
+
         const { error: updateError } = await supabase
           .from('inventory_locations')
+          // @ts-ignore
           .update({
             product_id: formData.product_id,
             location_type: formData.location_type,
@@ -82,8 +84,10 @@ export default function InventoryModal({ inventory, products, onClose }: Invento
         if (updateError) throw updateError
       } else {
         // Create new inventory
-        const { error: insertError } = await supabase
+
+        const { error: insertError} = await supabase
           .from('inventory_locations')
+          // @ts-ignore
           .insert([{
             product_id: formData.product_id,
             location_type: formData.location_type,

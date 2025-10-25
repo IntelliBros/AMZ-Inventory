@@ -1,11 +1,25 @@
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
 import SalesTrackingView from '@/components/SalesTrackingView'
 
 export default async function SalesPage() {
   const supabase = await createClient()
 
-  // Fetch sales records with product details
+  // Get current user from cookie
+  const cookieStore = await cookies()
+  const token = cookieStore.get('auth-token')?.value
+  const currentUser = await getCurrentUser(token)
+
+  if (!currentUser) {
+    throw new Error('Not authenticated')
+  }
+
+  // Get accessible user IDs (own ID + team member access)
+  const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
+
+  // Fetch sales records with product details (filtered by accessible users)
   const { data: salesRecords, error: salesError } = await supabase
     .from('sales_records')
     .select(`
@@ -17,16 +31,18 @@ export default async function SalesPage() {
         current_cost
       )
     `)
+    .in('user_id', accessibleUserIds)
     .order('end_date', { ascending: false })
 
   if (salesError) {
     console.error('Error fetching sales records:', salesError)
   }
 
-  // Fetch products for filtering
+  // Fetch products for filtering (filtered by accessible users)
   const { data: products, error: productsError } = await supabase
     .from('products')
     .select('id, sku, name')
+    .in('user_id', accessibleUserIds)
     .order('name')
 
   if (productsError) {

@@ -1,11 +1,25 @@
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
 import WarehouseSnapshotList from '@/components/WarehouseSnapshotList'
 
 export default async function WarehouseSnapshotsPage() {
   const supabase = await createClient()
 
-  // Fetch warehouse snapshots with product details
+  // Get current user from cookie
+  const cookieStore = await cookies()
+  const token = cookieStore.get('auth-token')?.value
+  const currentUser = await getCurrentUser(token)
+
+  if (!currentUser) {
+    throw new Error('Not authenticated')
+  }
+
+  // Get accessible user IDs (own ID + team member access)
+  const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
+
+  // Fetch warehouse snapshots with product details (filtered by accessible users)
   const { data: snapshots, error: snapshotsError } = await supabase
     .from('warehouse_snapshots')
     .select(`
@@ -16,16 +30,18 @@ export default async function WarehouseSnapshotsPage() {
         name
       )
     `)
+    .in('user_id', accessibleUserIds)
     .order('snapshot_date', { ascending: false })
 
   if (snapshotsError) {
     console.error('Error fetching snapshots:', snapshotsError)
   }
 
-  // Fetch products for dropdown
+  // Fetch products for dropdown (filtered by accessible users)
   const { data: products, error: productsError } = await supabase
     .from('products')
     .select('id, sku, name')
+    .in('user_id', accessibleUserIds)
     .order('name')
 
   if (productsError) {

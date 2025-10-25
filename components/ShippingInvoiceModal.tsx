@@ -262,7 +262,16 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
     setLoading(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      // Get current user from API
+      const userResponse = await fetch('/api/auth/me', {
+        credentials: 'include'
+      })
+
+      if (!userResponse.ok) {
+        throw new Error('User not authenticated')
+      }
+
+      const { user } = await userResponse.json()
 
       if (!user) {
         throw new Error('User not authenticated')

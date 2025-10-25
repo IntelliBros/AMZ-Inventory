@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
 import SupplierList from '@/components/SupplierList'
 import AddSupplierButton from '@/components/AddSupplierButton'
@@ -6,9 +8,22 @@ import AddSupplierButton from '@/components/AddSupplierButton'
 export default async function SuppliersPage() {
   const supabase = await createClient()
 
+  // Get current user from cookie
+  const cookieStore = await cookies()
+  const token = cookieStore.get('auth-token')?.value
+  const currentUser = await getCurrentUser(token)
+
+  if (!currentUser) {
+    throw new Error('Not authenticated')
+  }
+
+  // Get accessible user IDs (own ID + team member access)
+  const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
+
   const { data: suppliers, error } = await supabase
     .from('suppliers')
     .select('*')
+    .in('user_id', accessibleUserIds)
     .order('name')
 
   return (

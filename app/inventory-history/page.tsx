@@ -1,22 +1,38 @@
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
 import InventoryHistoryList from '@/components/InventoryHistoryList'
 
 export default async function InventoryHistoryPage() {
   const supabase = await createClient()
 
+  // Get current user from cookie
+  const cookieStore = await cookies()
+  const token = cookieStore.get('auth-token')?.value
+  const currentUser = await getCurrentUser(token)
+
+  if (!currentUser) {
+    throw new Error('Not authenticated')
+  }
+
+  // Get accessible user IDs (own ID + team member access)
+  const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
+
   const { data: inventory, error } = await supabase
     .from('inventory_locations')
     .select(`
       *,
-      products (
+      products!inner (
         id,
         sku,
         name,
         current_cost,
-        current_shipping_cost
+        current_shipping_cost,
+        user_id
       )
     `)
+    .in('products.user_id', accessibleUserIds)
     .order('created_at', { ascending: false })
 
   return (

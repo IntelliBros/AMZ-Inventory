@@ -1,10 +1,24 @@
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
 import ShippingInvoiceList from '@/components/ShippingInvoiceList'
 import AddShippingInvoiceButton from '@/components/AddShippingInvoiceButton'
 
 export default async function ShippingPage() {
   const supabase = await createClient()
+
+  // Get current user from cookie
+  const cookieStore = await cookies()
+  const token = cookieStore.get('auth-token')?.value
+  const currentUser = await getCurrentUser(token)
+
+  if (!currentUser) {
+    throw new Error('Not authenticated')
+  }
+
+  // Get accessible user IDs (own ID + team member access)
+  const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
 
   const { data: shippingInvoices, error } = await supabase
     .from('shipping_invoices')
@@ -19,11 +33,13 @@ export default async function ShippingPage() {
         )
       )
     `)
+    .in('user_id', accessibleUserIds)
     .order('created_at', { ascending: false })
 
   const { data: products } = await supabase
     .from('products')
     .select('id, sku, name, current_shipping_cost, carton_length_cm, carton_width_cm, carton_height_cm, carton_weight_kg, units_per_carton')
+    .in('user_id', accessibleUserIds)
     .order('name')
 
   return (

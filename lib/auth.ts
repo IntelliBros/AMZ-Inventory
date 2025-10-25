@@ -93,3 +93,61 @@ export async function getUserById(id: string): Promise<Omit<User, 'password_hash
   if (error) return null
   return data as Omit<User, 'password_hash' | 'updated_at'>
 }
+
+// Get current user from request cookies
+export async function getCurrentUser(token: string | undefined): Promise<{ id: string; email: string } | null> {
+  if (!token) return null
+
+  const payload = await verifyToken(token)
+  if (!payload) return null
+
+  return {
+    id: payload.userId,
+    email: payload.email
+  }
+}
+
+// Get all user IDs the current user can access (own ID + team member access)
+export async function getAccessibleUserIds(userId: string): Promise<string[]> {
+  const supabase = createServerClient()
+
+  // @ts-ignore - Supabase types don't recognize team_members table
+  const { data: teamAccess, error } = await supabase
+    .from('team_members')
+    .select('owner_id')
+    .eq('member_id', userId)
+
+  if (error) {
+    console.error('Error fetching team access:', error)
+    return [userId] // Return just own ID if error
+  }
+
+  // Start with user's own ID
+  const accessibleIds = [userId]
+
+  // Add all owner IDs where this user is a team member
+  if (teamAccess && teamAccess.length > 0) {
+    accessibleIds.push(...teamAccess.map((t: any) => t.owner_id))
+  }
+
+  return accessibleIds
+}
+
+// Check if user has specific role for an owner account
+export async function getUserRole(memberId: string, ownerId: string): Promise<'owner' | 'admin' | 'editor' | 'viewer' | null> {
+  // If checking own account, return 'owner'
+  if (memberId === ownerId) return 'owner'
+
+  const supabase = createServerClient()
+
+  // @ts-ignore - Supabase types don't recognize team_members table
+  const { data, error } = await supabase
+    .from('team_members')
+    .select('role')
+    .eq('member_id', memberId)
+    .eq('owner_id', ownerId)
+    .single()
+
+  if (error || !data) return null
+  return data.role as 'admin' | 'editor' | 'viewer'
+}

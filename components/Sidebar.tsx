@@ -11,7 +11,8 @@ import {
   ShoppingCartIcon,
   TruckIcon,
   BuildingOfficeIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline'
 
 const navigation = [
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Shipping', href: '/shipping', icon: TruckIcon },
   { name: 'Warehouse', href: '/warehouse-snapshots', icon: BuildingOfficeIcon },
   { name: 'Sales', href: '/sales', icon: ChartBarIcon },
+  { name: 'Team', href: '/team', icon: UserGroupIcon },
 ]
 
 export default function Sidebar() {

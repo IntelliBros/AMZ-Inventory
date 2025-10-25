@@ -107,7 +107,7 @@ function InventoryList({ inventory, products, warehouseSnapshots }: InventoryLis
       }
 
       // Map 'fba' location_type to 'warehouse' for display
-      const displayLocationType = item.location_type === 'fba' ? 'warehouse' : item.location_type
+      const displayLocationType = (item.location_type as string) === 'fba' ? 'warehouse' : item.location_type
       aggregated[item.product_id].locations[displayLocationType] += item.quantity
       aggregated[item.product_id].total_quantity += item.quantity
       aggregated[item.product_id].total_value += item.quantity * (item.unit_cost + item.unit_shipping_cost)
@@ -129,7 +129,7 @@ function InventoryList({ inventory, products, warehouseSnapshots }: InventoryLis
     // Process ALL inventory including FBA (warehouse)
     inventory.forEach((item) => {
       // Map 'fba' location_type to 'warehouse' for display
-      const displayLocationType = item.location_type === 'fba' ? 'warehouse' : item.location_type
+      const displayLocationType = (item.location_type as string) === 'fba' ? 'warehouse' : item.location_type
 
       const totalUnitCost = item.unit_cost + item.unit_shipping_cost
       totals[displayLocationType].quantity += item.quantity

@@ -49,11 +49,10 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
 }
 
 // Create user
-export async function createUser(email: string, password: string) {
+export async function createUser(email: string, password: string): Promise<{ id: string; email: string }> {
   const supabase = createClient()
   const passwordHash = await hashPassword(password)
 
-  // @ts-ignore
   const { data, error } = await supabase
     .from('users')
     .insert([{ email, password_hash: passwordHash }])
@@ -61,7 +60,7 @@ export async function createUser(email: string, password: string) {
     .single()
 
   if (error) throw error
-  return data
+  return data as { id: string; email: string }
 }
 
 // Get user by email
@@ -79,10 +78,9 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 }
 
 // Get user by ID
-export async function getUserById(id: string) {
+export async function getUserById(id: string): Promise<Omit<User, 'password_hash' | 'updated_at'> | null> {
   const supabase = createClient()
 
-  // @ts-ignore
   const { data, error } = await supabase
     .from('users')
     .select('id, email, created_at')
@@ -90,5 +88,5 @@ export async function getUserById(id: string) {
     .single()
 
   if (error) return null
-  return data
+  return data as Omit<User, 'password_hash' | 'updated_at'>
 }

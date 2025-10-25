@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+:root {
+  --background: #EAEDED;
+  --foreground: #0F1111;
+  --amazon-orange: #FF9900;
+  --amazon-blue: #146EB4;
+  --amazon-dark: #232F3E;
+  --amazon-light-bg: #F7F8F8;
+  --border-color: #D5D9D9;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Amazon Ember', Arial, sans-serif;
+}
+
+/* Ensure all input and select fields have black text */
+input,
+select,
+textarea {
+  color: #000000 !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9CA3AF !important;
+}
+
+/* Keep disabled inputs with gray text */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  color: #6B7280 !important;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

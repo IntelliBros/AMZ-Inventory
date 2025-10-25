@@ -9,12 +9,59 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      teams: {
+        Row: {
+          id: string
+          name: string
+          owner_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          owner_id: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          owner_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      team_users: {
+        Row: {
+          id: string
+          team_id: string
+          user_id: string
+          role: 'owner' | 'admin' | 'editor' | 'viewer' | 'member'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          user_id: string
+          role?: 'owner' | 'admin' | 'editor' | 'viewer' | 'member'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          user_id?: string
+          role?: 'owner' | 'admin' | 'editor' | 'viewer' | 'member'
+          created_at?: string
+        }
+      }
       suppliers: {
         Row: {
           id: string
           created_at: string
           updated_at: string
           user_id: string
+          team_id: string
           name: string
           contact_person: string | null
           email: string | null
@@ -27,6 +74,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           user_id: string
+          team_id: string
           name: string
           contact_person?: string | null
           email?: string | null
@@ -39,6 +87,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           user_id?: string
+          team_id?: string
           name?: string
           contact_person?: string | null
           email?: string | null
@@ -53,6 +102,7 @@ export interface Database {
           created_at: string
           updated_at: string
           user_id: string
+          team_id: string
           sku: string
           name: string
           description: string | null
@@ -72,6 +122,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           user_id: string
+          team_id: string
           sku: string
           name: string
           description?: string | null
@@ -91,6 +142,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           user_id?: string
+          team_id?: string
           sku?: string
           name?: string
           description?: string | null
@@ -150,6 +202,7 @@ export interface Database {
           created_at: string
           updated_at: string
           user_id: string
+          team_id: string
           po_number: string
           supplier: string
           order_date: string
@@ -163,6 +216,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           user_id: string
+          team_id: string
           po_number: string
           supplier: string
           order_date: string
@@ -176,6 +230,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           user_id?: string
+          team_id?: string
           po_number?: string
           supplier?: string
           order_date?: string
@@ -223,6 +278,7 @@ export interface Database {
           created_at: string
           updated_at: string
           user_id: string
+          team_id: string
           invoice_number: string
           shipping_date: string
           carrier: string
@@ -236,6 +292,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           user_id: string
+          team_id: string
           invoice_number: string
           shipping_date: string
           carrier: string
@@ -249,6 +306,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           user_id?: string
+          team_id?: string
           invoice_number?: string
           shipping_date?: string
           carrier?: string
@@ -315,6 +373,7 @@ export interface Database {
           id: string
           created_at: string
           user_id: string
+          team_id: string
           product_id: string
           snapshot_date: string
           quantity: number
@@ -324,6 +383,7 @@ export interface Database {
           id?: string
           created_at?: string
           user_id: string
+          team_id: string
           product_id: string
           snapshot_date: string
           quantity: number
@@ -333,6 +393,7 @@ export interface Database {
           id?: string
           created_at?: string
           user_id?: string
+          team_id?: string
           product_id?: string
           snapshot_date?: string
           quantity?: number
@@ -344,6 +405,7 @@ export interface Database {
           id: string
           created_at: string
           user_id: string
+          team_id: string
           product_id: string
           start_date: string
           end_date: string
@@ -356,6 +418,7 @@ export interface Database {
           id?: string
           created_at?: string
           user_id: string
+          team_id: string
           product_id: string
           start_date: string
           end_date: string
@@ -368,6 +431,7 @@ export interface Database {
           id?: string
           created_at?: string
           user_id?: string
+          team_id?: string
           product_id?: string
           start_date?: string
           end_date?: string

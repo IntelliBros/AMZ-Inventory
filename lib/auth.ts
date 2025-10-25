@@ -211,3 +211,50 @@ export async function isViewer(userId: string): Promise<boolean> {
   return memberships.every(m => m.role === 'viewer')
 }
 
+// Get current team ID from cookie, or default to user's first team
+export async function getCurrentTeamId(cookieTeamId: string | undefined, userId: string): Promise<string | null> {
+  const supabase = createServerClient()
+
+  // If cookie has a team ID, verify user has access to it
+  if (cookieTeamId) {
+    const { data: teamUser } = await supabase
+      .from('team_users')
+      .select('team_id')
+      .eq('team_id', cookieTeamId)
+      .eq('user_id', userId)
+      .single()
+
+    if (teamUser) {
+      return cookieTeamId
+    }
+  }
+
+  // Otherwise, get user's first team (default)
+  const { data: teamUser } = await supabase
+    .from('team_users')
+    .select('team_id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .single()
+
+  return teamUser?.team_id || null
+}
+
+// Check if user has write permissions for a team
+export async function hasTeamWritePermission(userId: string, teamId: string): Promise<boolean> {
+  const supabase = createServerClient()
+
+  const { data: teamUser } = await supabase
+    .from('team_users')
+    .select('role')
+    .eq('team_id', teamId)
+    .eq('user_id', userId)
+    .single()
+
+  if (!teamUser) return false
+
+  // Owner, admin, and editor have write permissions
+  return teamUser.role === 'owner' || teamUser.role === 'admin' || teamUser.role === 'editor'
+}
+

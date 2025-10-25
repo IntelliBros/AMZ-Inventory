@@ -12,6 +12,8 @@ export async function POST(request: NextRequest) {
     const token = cookieStore.get('auth-token')?.value
     const currentUser = await getCurrentUser(token)
 
+    console.log('Current user from token:', currentUser)
+
     if (!currentUser) {
       return NextResponse.json(
         { error: 'Not authenticated' },
@@ -41,6 +43,8 @@ export async function POST(request: NextRequest) {
       user_id: currentUser.id,
     }
 
+    console.log('Supplier data to insert:', supplierData)
+
     // @ts-ignore - Supabase types don't recognize suppliers table
     const { data, error } = await supabase
       .from('suppliers')
@@ -49,7 +53,10 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Supabase insert error:', error)
+      throw error
+    }
 
     return NextResponse.json({ supplier: data })
   } catch (error: any) {

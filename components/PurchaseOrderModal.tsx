@@ -315,12 +315,15 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
     setError(null)
 
     try {
-      const { error: deleteError } = await supabase
-        .from('purchase_orders')
-        .delete()
-        .eq('id', purchaseOrder.id)
+      const response = await fetch(`/api/purchase-orders/${purchaseOrder.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
 
-      if (deleteError) throw deleteError
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete purchase order')
+      }
 
       router.refresh()
       onClose()

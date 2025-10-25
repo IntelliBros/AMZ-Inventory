@@ -120,12 +120,32 @@ export async function DELETE(
 
     const supabase = createServerClient()
 
-    // @ts-ignore - Supabase types don't recognize purchase_orders table
+    // Check permissions first
+    const { data: po, error: poError } = await supabase
+      .from('purchase_orders')
+      .select('user_id')
+      .eq('id', id)
+      .single<{ user_id: string }>()
+
+    if (poError || !po) {
+      return NextResponse.json(
+        { error: 'Purchase order not found' },
+        { status: 404 }
+      )
+    }
+
+    const canWrite = await hasWritePermission(currentUser.id, po.user_id)
+    if (!canWrite) {
+      return NextResponse.json(
+        { error: 'You do not have permission to delete this purchase order' },
+        { status: 403 }
+      )
+    }
+
     const { error } = await supabase
       .from('purchase_orders')
       .delete()
       .eq('id', id)
-      .eq('user_id', currentUser.id)
 
     if (error) {
       throw error

@@ -55,6 +55,20 @@ export default function Sidebar() {
 
   useEffect(() => {
     fetchTeamName()
+
+    // Listen for team changes from Header component
+    const handleTeamChange = (event: CustomEvent) => {
+      if (event.detail?.name) {
+        setTeamName(event.detail.name)
+        cacheTeamName(event.detail.name)
+      }
+    }
+
+    window.addEventListener('teamChanged', handleTeamChange as EventListener)
+
+    return () => {
+      window.removeEventListener('teamChanged', handleTeamChange as EventListener)
+    }
   }, [])
 
   const fetchTeamName = async () => {

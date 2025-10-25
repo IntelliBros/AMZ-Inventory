@@ -24,7 +24,27 @@ export default function Header() {
 
   useEffect(() => {
     fetchTeams()
-  }, [])
+
+    // Listen for team name changes
+    const handleTeamChange = (event: CustomEvent) => {
+      if (event.detail?.name && currentTeam) {
+        // Update the current team name in state
+        setCurrentTeam({ ...currentTeam, name: event.detail.name })
+        // Also update in the teams list
+        setTeams(prevTeams =>
+          prevTeams.map(t =>
+            t.id === currentTeam.id ? { ...t, name: event.detail.name } : t
+          )
+        )
+      }
+    }
+
+    window.addEventListener('teamChanged', handleTeamChange as EventListener)
+
+    return () => {
+      window.removeEventListener('teamChanged', handleTeamChange as EventListener)
+    }
+  }, [currentTeam])
 
   const fetchTeams = async () => {
     try {
@@ -63,7 +83,12 @@ export default function Header() {
       if (response.ok) {
         setCurrentTeam(team)
         localStorage.setItem('current_team_id', team.id)
+        localStorage.setItem('team_name', team.name) // Update team name for Sidebar
         setShowDropdown(false)
+
+        // Trigger a custom event so Sidebar can update
+        window.dispatchEvent(new CustomEvent('teamChanged', { detail: { name: team.name } }))
+
         router.refresh() // Reload data with new team
       }
     } catch (err) {

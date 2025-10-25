@@ -40,6 +40,18 @@ export default function TeamManagement({ currentUser }: TeamManagementProps) {
   useEffect(() => {
     fetchTeamMembers()
     fetchTeamSettings()
+
+    // Listen for team changes
+    const handleTeamChange = () => {
+      fetchTeamMembers()
+      fetchTeamSettings()
+    }
+
+    window.addEventListener('teamChanged', handleTeamChange)
+
+    return () => {
+      window.removeEventListener('teamChanged', handleTeamChange)
+    }
   }, [])
 
   const fetchTeamSettings = async () => {
@@ -191,6 +203,8 @@ export default function TeamManagement({ currentUser }: TeamManagementProps) {
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('team_name', teamName.trim())
+          // Trigger event so Sidebar and Header update
+          window.dispatchEvent(new CustomEvent('teamChanged', { detail: { name: teamName.trim() } }))
         } catch {
           // Ignore localStorage errors
         }

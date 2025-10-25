@@ -130,6 +130,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       teamMember: {
+        // @ts-ignore - Supabase types don't recognize team_members table
         ...teamMember,
         member: memberUser,
       },

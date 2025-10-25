@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -11,7 +10,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,15 +17,23 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
       })
 
-      if (error) throw error
+      const data = await response.json()
 
-      router.push('/')
-      router.refresh()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to log in')
+      }
+
+      // Force a hard navigation to ensure cookies are picked up
+      window.location.href = '/'
     } catch (err: any) {
       setError(err.message)
     } finally {

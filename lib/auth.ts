@@ -53,6 +53,7 @@ export async function createUser(email: string, password: string): Promise<{ id:
   const supabase = createClient()
   const passwordHash = await hashPassword(password)
 
+  // @ts-ignore - Supabase types don't recognize users table
   const { data, error } = await supabase
     .from('users')
     .insert([{ email, password_hash: passwordHash }])
@@ -67,6 +68,7 @@ export async function createUser(email: string, password: string): Promise<{ id:
 export async function getUserByEmail(email: string): Promise<User | null> {
   const supabase = createClient()
 
+  // @ts-ignore - Supabase types don't recognize users table
   const { data, error } = await supabase
     .from('users')
     .select('*')
@@ -81,6 +83,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 export async function getUserById(id: string): Promise<Omit<User, 'password_hash' | 'updated_at'> | null> {
   const supabase = createClient()
 
+  // @ts-ignore - Supabase types don't recognize users table
   const { data, error } = await supabase
     .from('users')
     .select('id, email, created_at')

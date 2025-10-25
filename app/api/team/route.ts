@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
     // @ts-ignore - Supabase types don't recognize team_members table
     const { data: teamMember, error: insertError } = await supabase
       .from('team_members')
+      // @ts-ignore - Supabase types don't recognize team_members table
       .insert([
         {
           owner_id: currentUser.id,

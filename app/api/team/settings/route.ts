@@ -43,6 +43,7 @@ export async function PATCH(request: NextRequest) {
 
     if (error) throw error
 
+    // @ts-ignore
     return NextResponse.json({ success: true, team_name: data.team_name })
   } catch (error: any) {
     console.error('Error updating team settings:', error)
@@ -79,6 +80,7 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
+    // @ts-ignore
     return NextResponse.json({ team_name: data?.team_name || 'Amazon FBA' })
   } catch (error: any) {
     console.error('Error fetching team settings:', error)

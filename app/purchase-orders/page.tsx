@@ -18,8 +18,8 @@ export default async function PurchaseOrdersPage() {
   }
 
   // Get team from cookie and get current team ID
-  const teamCookie = cookieStore.get('team')?.value
-  const currentTeamId = await getCurrentTeamId(teamCookie, currentUser.id)
+  const teamIdCookie = cookieStore.get('current-team-id')?.value
+  const currentTeamId = await getCurrentTeamId(teamIdCookie, currentUser.id)
 
   if (!currentTeamId) {
     throw new Error('No team found')

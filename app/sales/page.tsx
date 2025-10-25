@@ -17,8 +17,8 @@ export default async function SalesPage() {
   }
 
   // Get current team ID from cookie or default to user's first team
-  const team = cookieStore.get('team')?.value
-  const currentTeamId = await getCurrentTeamId(team, currentUser.id)
+  const teamIdCookie = cookieStore.get('current-team-id')?.value
+  const currentTeamId = await getCurrentTeamId(teamIdCookie, currentUser.id)
 
   if (!currentTeamId) {
     throw new Error('No team access')

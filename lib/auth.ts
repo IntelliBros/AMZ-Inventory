@@ -6,7 +6,7 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production-to-a-random-string'
 )
 
-export interface JWTPayload {
+export interface AuthJWTPayload {
   userId: string
   email: string
 }
@@ -30,7 +30,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 // Generate JWT token
-export async function generateToken(payload: JWTPayload): Promise<string> {
+export async function generateToken(payload: AuthJWTPayload): Promise<string> {
   return await new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -39,10 +39,10 @@ export async function generateToken(payload: JWTPayload): Promise<string> {
 }
 
 // Verify JWT token
-export async function verifyToken(token: string): Promise<JWTPayload | null> {
+export async function verifyToken(token: string): Promise<AuthJWTPayload | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload as JWTPayload
+    return payload as unknown as AuthJWTPayload
   } catch (error) {
     return null
   }

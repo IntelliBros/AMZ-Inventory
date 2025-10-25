@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { SignJWT, jwtVerify } from 'jose'
-import { createClient } from '@/lib/supabase/client'
+import { createServerClient } from '@/lib/supabase/server'
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production-to-a-random-string'
@@ -50,7 +50,7 @@ export async function verifyToken(token: string): Promise<AuthJWTPayload | null>
 
 // Create user
 export async function createUser(email: string, password: string): Promise<{ id: string; email: string }> {
-  const supabase = createClient()
+  const supabase = createServerClient()
   const passwordHash = await hashPassword(password)
 
   const { data, error } = await supabase
@@ -66,7 +66,7 @@ export async function createUser(email: string, password: string): Promise<{ id:
 
 // Get user by email
 export async function getUserByEmail(email: string): Promise<User | null> {
-  const supabase = createClient()
+  const supabase = createServerClient()
 
   // @ts-ignore - Supabase types don't recognize users table
   const { data, error } = await supabase
@@ -81,7 +81,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 
 // Get user by ID
 export async function getUserById(id: string): Promise<Omit<User, 'password_hash' | 'updated_at'> | null> {
-  const supabase = createClient()
+  const supabase = createServerClient()
 
   // @ts-ignore - Supabase types don't recognize users table
   const { data, error } = await supabase

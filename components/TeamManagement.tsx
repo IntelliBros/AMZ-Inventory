@@ -187,6 +187,15 @@ export default function TeamManagement({ currentUser }: TeamManagementProps) {
         throw new Error('Failed to update team name')
       }
 
+      // Update localStorage cache so sidebar doesn't flash old name
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('team_name', teamName.trim())
+        } catch {
+          // Ignore localStorage errors
+        }
+      }
+
       setIsEditingTeamName(false)
       router.refresh()
     } catch (err: any) {

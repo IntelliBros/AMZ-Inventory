@@ -29,9 +29,29 @@ const navigation = [
   { name: 'Team', href: '/team', icon: UserGroupIcon },
 ]
 
+// Get cached team name from localStorage
+const getCachedTeamName = (): string => {
+  if (typeof window === 'undefined') return ''
+  try {
+    return localStorage.getItem('team_name') || ''
+  } catch {
+    return ''
+  }
+}
+
+// Cache team name in localStorage
+const cacheTeamName = (name: string) => {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem('team_name', name)
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
 export default function Sidebar() {
   const pathname = usePathname()
-  const [teamName, setTeamName] = useState('Amazon FBA')
+  const [teamName, setTeamName] = useState(getCachedTeamName())
 
   useEffect(() => {
     fetchTeamName()
@@ -45,11 +65,16 @@ export default function Sidebar() {
 
       if (response.ok) {
         const { team_name } = await response.json()
-        setTeamName(team_name || 'Amazon FBA')
+        const finalName = team_name || 'Amazon FBA'
+        setTeamName(finalName)
+        cacheTeamName(finalName)
       }
     } catch (err) {
       console.error('Error fetching team name:', err)
-      // Keep default name on error
+      // Keep cached/default name on error
+      if (!teamName) {
+        setTeamName('Amazon FBA')
+      }
     }
   }
 

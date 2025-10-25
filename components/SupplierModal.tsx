@@ -33,21 +33,6 @@ export default function SupplierModal({ supplier, onClose }: SupplierModalProps)
     setLoading(true)
 
     try {
-      // Get current user from API
-      const userResponse = await fetch('/api/auth/me', {
-        credentials: 'include'
-      })
-
-      if (!userResponse.ok) {
-        throw new Error('User not authenticated')
-      }
-
-      const { user } = await userResponse.json()
-
-      if (!user) {
-        throw new Error('User not authenticated')
-      }
-
       const supplierData = {
         name: formData.name,
         contact_person: formData.contact_person || null,
@@ -55,26 +40,38 @@ export default function SupplierModal({ supplier, onClose }: SupplierModalProps)
         phone: formData.phone || null,
         address: formData.address || null,
         notes: formData.notes || null,
-        user_id: user.id,
       }
 
       if (supplier) {
         // Update existing supplier
-        const { error: updateError } = await supabase
-          .from('suppliers')
-          // @ts-ignore
-          .update(supplierData)
-          .eq('id', supplier.id)
+        const response = await fetch(`/api/suppliers/${supplier.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(supplierData),
+        })
 
-        if (updateError) throw updateError
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Failed to update supplier')
+        }
       } else {
         // Create new supplier
-        const { error: insertError } = await supabase
-          .from('suppliers')
-          // @ts-ignore
-          .insert([supplierData])
+        const response = await fetch('/api/suppliers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(supplierData),
+        })
 
-        if (insertError) throw insertError
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Failed to create supplier')
+        }
       }
 
       router.refresh()
@@ -97,12 +94,15 @@ export default function SupplierModal({ supplier, onClose }: SupplierModalProps)
     setError(null)
 
     try {
-      const { error: deleteError } = await supabase
-        .from('suppliers')
-        .delete()
-        .eq('id', supplier.id)
+      const response = await fetch(`/api/suppliers/${supplier.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
 
-      if (deleteError) throw deleteError
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to delete supplier')
+      }
 
       router.refresh()
       onClose()

@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 // PATCH /api/team/[id] - Update a team member's role
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const cookieStore = await cookies()
@@ -31,6 +31,7 @@ export async function PATCH(
       )
     }
 
+    const { id } = await params
     const supabase = createServerClient()
 
     // Update team member role (only if current user is the owner)
@@ -38,7 +39,7 @@ export async function PATCH(
     const { error: updateError } = await supabase
       .from('team_members')
       .update({ role })
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('owner_id', currentUser.id)
 
     if (updateError) throw updateError
@@ -56,7 +57,7 @@ export async function PATCH(
 // DELETE /api/team/[id] - Remove a team member
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const cookieStore = await cookies()
@@ -70,6 +71,7 @@ export async function DELETE(
       )
     }
 
+    const { id } = await params
     const supabase = createServerClient()
 
     // Delete team member (only if current user is the owner)
@@ -77,7 +79,7 @@ export async function DELETE(
     const { error: deleteError } = await supabase
       .from('team_members')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('owner_id', currentUser.id)
 
     if (deleteError) throw deleteError

@@ -120,12 +120,15 @@ export default function InventoryModal({ inventory, products, onClose }: Invento
     setError(null)
 
     try {
-      const { error: deleteError } = await supabase
-        .from('inventory_locations')
-        .delete()
-        .eq('id', inventory.id)
+      const response = await fetch(`/api/inventory-locations/${inventory.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
 
-      if (deleteError) throw deleteError
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete inventory location')
+      }
 
       router.refresh()
       onClose()

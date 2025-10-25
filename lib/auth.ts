@@ -11,6 +11,14 @@ export interface JWTPayload {
   email: string
 }
 
+export interface User {
+  id: string
+  email: string
+  password_hash: string
+  created_at: string
+  updated_at?: string
+}
+
 // Hash password
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10)
@@ -57,10 +65,9 @@ export async function createUser(email: string, password: string) {
 }
 
 // Get user by email
-export async function getUserByEmail(email: string) {
+export async function getUserByEmail(email: string): Promise<User | null> {
   const supabase = createClient()
 
-  // @ts-ignore
   const { data, error } = await supabase
     .from('users')
     .select('*')
@@ -68,7 +75,7 @@ export async function getUserByEmail(email: string) {
     .single()
 
   if (error) return null
-  return data
+  return data as User
 }
 
 // Get user by ID

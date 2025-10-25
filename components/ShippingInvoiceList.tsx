@@ -62,9 +62,13 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
 
     try {
       // Update shipment status to delivered
+      const updateData = {
+        status: 'delivered' as const
+      } satisfies Database['public']['Tables']['shipping_invoices']['Update']
+
       const { error: updateError } = await supabase
         .from('shipping_invoices')
-        .update({ status: 'delivered' })
+        .update(updateData)
         .eq('id', invoice.id)
 
       if (updateError) throw updateError

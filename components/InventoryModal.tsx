@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Database } from '@/types/database.types'
 
 type InventoryLocation = Database['public']['Tables']['inventory_locations']['Row']
-type LocationType = 'warehouse' | 'en_route' | 'storage' | 'production'
+type LocationType = Database['public']['Tables']['inventory_locations']['Row']['location_type']
 
 interface Product {
   id: string
@@ -65,20 +65,18 @@ export default function InventoryModal({ inventory, products, onClose }: Invento
     setLoading(true)
 
     try {
-      const inventoryData = {
-        product_id: formData.product_id,
-        location_type: formData.location_type,
-        quantity: parseInt(formData.quantity),
-        unit_cost: parseFloat(formData.unit_cost),
-        unit_shipping_cost: parseFloat(formData.unit_shipping_cost),
-        notes: formData.notes || null,
-      }
-
       if (inventory) {
         // Update existing inventory
         const { error: updateError } = await supabase
           .from('inventory_locations')
-          .update(inventoryData)
+          .update({
+            product_id: formData.product_id,
+            location_type: formData.location_type,
+            quantity: parseInt(formData.quantity),
+            unit_cost: parseFloat(formData.unit_cost),
+            unit_shipping_cost: parseFloat(formData.unit_shipping_cost),
+            notes: formData.notes || null,
+          })
           .eq('id', inventory.id)
 
         if (updateError) throw updateError
@@ -86,7 +84,14 @@ export default function InventoryModal({ inventory, products, onClose }: Invento
         // Create new inventory
         const { error: insertError } = await supabase
           .from('inventory_locations')
-          .insert([inventoryData])
+          .insert([{
+            product_id: formData.product_id,
+            location_type: formData.location_type,
+            quantity: parseInt(formData.quantity),
+            unit_cost: parseFloat(formData.unit_cost),
+            unit_shipping_cost: parseFloat(formData.unit_shipping_cost),
+            notes: formData.notes || null,
+          }])
 
         if (insertError) throw insertError
       }

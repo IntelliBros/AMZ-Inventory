@@ -382,7 +382,13 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_total_delivered: {
+        Args: {
+          p_product_id: string
+          p_quantity: number
+        }
+        Returns: void
+      }
     }
     Enums: {
       location_type: 'warehouse' | 'en_route' | 'in_storage' | 'in_production'

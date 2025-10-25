@@ -119,18 +119,20 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
       .from('purchase_orders')
       .select('po_number')
       .eq('id', poId)
-      .single()
+      .single() as { data: { po_number: string } | null }
 
     if (!po) return
 
     // If marking as in_storage (complete), move all inventory from production to storage
     if (oldStatus === 'in_production' && newStatus === 'in_storage') {
+      const updateData = {
+        location_type: 'storage' as const,
+        notes: `PO ${po.po_number} Complete`
+      } satisfies Database['public']['Tables']['inventory_locations']['Update']
+
       const { error } = await supabase
         .from('inventory_locations')
-        .update({
-          location_type: 'storage',
-          notes: `PO ${po.po_number} Complete`
-        })
+        .update(updateData)
         .eq('po_id', poId)
         .eq('location_type', 'production')
 
@@ -139,12 +141,14 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
 
     // If changing back from in_storage to in_production, move inventory back
     if (oldStatus === 'in_storage' && newStatus === 'in_production') {
+      const updateData = {
+        location_type: 'production' as const,
+        notes: `PO ${po.po_number} In Production`
+      } satisfies Database['public']['Tables']['inventory_locations']['Update']
+
       const { error } = await supabase
         .from('inventory_locations')
-        .update({
-          location_type: 'production',
-          notes: `PO ${po.po_number} In Production`
-        })
+        .update(updateData)
         .eq('po_id', poId)
         .eq('location_type', 'storage')
 
@@ -184,9 +188,11 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
 
       if (purchaseOrder) {
         // Update existing PO
+        const updateData = poData satisfies Database['public']['Tables']['purchase_orders']['Update']
+
         const { error: updateError } = await supabase
           .from('purchase_orders')
-          .update(poData)
+          .update(updateData)
           .eq('id', purchaseOrder.id)
 
         if (updateError) throw updateError
@@ -206,7 +212,7 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
           quantity: item.quantity,
           unit_cost: item.unit_cost,
           total_cost: item.quantity * item.unit_cost,
-        }))
+        })) satisfies Database['public']['Tables']['po_line_items']['Insert'][]
 
         const { error: lineItemsError } = await supabase
           .from('po_line_items')
@@ -216,17 +222,20 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
 
         // Handle status change: update inventory locations if status changed
         if (previousStatus !== formData.status) {
-          await handleStatusChange(purchaseOrder.id, previousStatus, formData.status)
+          await handleStatusChange(purchaseOrder.id, previousStatus, formData.status as POStatus)
         }
       } else {
         // Create new PO
+        const insertData = poData satisfies Database['public']['Tables']['purchase_orders']['Insert']
+
         const { data: newPO, error: insertError } = await supabase
           .from('purchase_orders')
-          .insert([poData])
+          .insert([insertData])
           .select()
           .single()
 
         if (insertError) throw insertError
+        if (!newPO) throw new Error('Failed to create purchase order')
 
         // Insert line items
         const lineItemsData = lineItems.map(item => ({
@@ -235,7 +244,7 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
           quantity: item.quantity,
           unit_cost: item.unit_cost,
           total_cost: item.quantity * item.unit_cost,
-        }))
+        })) satisfies Database['public']['Tables']['po_line_items']['Insert'][]
 
         const { error: lineItemsError } = await supabase
           .from('po_line_items')
@@ -245,7 +254,7 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
 
         // AUTO-CREATE INVENTORY for new PO
         // Create inventory records for each line item with location_type based on status
-        const locationType = formData.status === 'in_production' ? 'production' : 'storage'
+        const locationType = (formData.status === 'in_production' ? 'production' : 'storage') as const
         const statusNote = formData.status === 'in_production' ? 'In Production' : 'Complete'
         const inventoryData = lineItems.map(item => ({
           product_id: item.product_id,
@@ -255,7 +264,7 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
           unit_shipping_cost: 0, // Shipping cost added separately via shipping invoices
           po_id: newPO.id,
           notes: `PO ${formData.po_number} ${statusNote}`,
-        }))
+        })) satisfies Database['public']['Tables']['inventory_locations']['Insert'][]
 
         const { error: inventoryError } = await supabase
           .from('inventory_locations')
@@ -285,9 +294,13 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
 
     try {
       // Update PO status to in_storage
+      const updateData = {
+        status: 'in_storage' as const
+      } satisfies Database['public']['Tables']['purchase_orders']['Update']
+
       const { error: updateError } = await supabase
         .from('purchase_orders')
-        .update({ status: 'in_storage' })
+        .update(updateData)
         .eq('id', purchaseOrder.id)
 
       if (updateError) throw updateError

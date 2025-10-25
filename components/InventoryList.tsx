@@ -84,9 +84,9 @@ function InventoryList({ inventory, products, warehouseSnapshots }: InventoryLis
   const productInventories = useMemo(() => {
     const aggregated: Record<string, ProductInventory> = {}
 
-    // Process regular inventory (skip warehouse - we'll get that from snapshots)
+    // Process ALL inventory including FBA (warehouse)
     inventory.forEach((item) => {
-      if (!item.products || item.location_type === 'warehouse') return
+      if (!item.products) return
 
       if (!aggregated[item.product_id]) {
         aggregated[item.product_id] = {
@@ -106,87 +106,38 @@ function InventoryList({ inventory, products, warehouseSnapshots }: InventoryLis
         }
       }
 
-      aggregated[item.product_id].locations[item.location_type] += item.quantity
+      // Map 'fba' location_type to 'warehouse' for display
+      const displayLocationType = item.location_type === 'fba' ? 'warehouse' : item.location_type
+      aggregated[item.product_id].locations[displayLocationType] += item.quantity
       aggregated[item.product_id].total_quantity += item.quantity
       aggregated[item.product_id].total_value += item.quantity * (item.unit_cost + item.unit_shipping_cost)
     })
 
-    // Get latest snapshot per product for warehouse inventory
-    const latestSnapshots = new Map<string, WarehouseSnapshot>()
-    warehouseSnapshots.forEach(snapshot => {
-      const existing = latestSnapshots.get(snapshot.product_id)
-      if (!existing || new Date(snapshot.snapshot_date) > new Date(existing.snapshot_date)) {
-        latestSnapshots.set(snapshot.product_id, snapshot)
-      }
-    })
-
-    // Add warehouse inventory from latest snapshots
-    latestSnapshots.forEach(snapshot => {
-      if (!snapshot.products) return
-
-      if (!aggregated[snapshot.product_id]) {
-        aggregated[snapshot.product_id] = {
-          product_id: snapshot.product_id,
-          product_name: snapshot.products.name,
-          product_sku: snapshot.products.sku,
-          current_cost: snapshot.products.current_cost,
-          current_shipping_cost: snapshot.products.current_shipping_cost,
-          locations: {
-            warehouse: 0,
-            en_route: 0,
-            storage: 0,
-            production: 0,
-          },
-          total_quantity: 0,
-          total_value: 0,
-        }
-      }
-
-      const totalUnitCost = snapshot.products.current_cost + snapshot.products.current_shipping_cost
-      aggregated[snapshot.product_id].locations.warehouse += snapshot.quantity
-      aggregated[snapshot.product_id].total_quantity += snapshot.quantity
-      aggregated[snapshot.product_id].total_value += snapshot.quantity * totalUnitCost
-    })
-
     return Object.values(aggregated).sort((a, b) => a.product_name.localeCompare(b.product_name))
-  }, [inventory, warehouseSnapshots])
+  }, [inventory])
 
   // Calculate totals by location type
   const totalsByLocation = useMemo(() => {
     const totals: Record<string, { quantity: number; value: number }> = {}
 
-    // Process regular inventory (skip warehouse - we'll get that from snapshots)
-    inventory.forEach((item) => {
-      if (item.location_type === 'warehouse') return
-
-      if (!totals[item.location_type]) {
-        totals[item.location_type] = { quantity: 0, value: 0 }
-      }
-      const totalUnitCost = item.unit_cost + item.unit_shipping_cost
-      totals[item.location_type].quantity += item.quantity
-      totals[item.location_type].value += item.quantity * totalUnitCost
-    })
-
-    // Get latest snapshot per product for warehouse inventory
-    const latestSnapshots = new Map<string, WarehouseSnapshot>()
-    warehouseSnapshots.forEach(snapshot => {
-      const existing = latestSnapshots.get(snapshot.product_id)
-      if (!existing || new Date(snapshot.snapshot_date) > new Date(existing.snapshot_date)) {
-        latestSnapshots.set(snapshot.product_id, snapshot)
-      }
-    })
-
-    // Add warehouse totals from latest snapshots
+    // Initialize all location types
     totals.warehouse = { quantity: 0, value: 0 }
-    latestSnapshots.forEach(snapshot => {
-      if (!snapshot.products) return
-      const totalUnitCost = snapshot.products.current_cost + snapshot.products.current_shipping_cost
-      totals.warehouse.quantity += snapshot.quantity
-      totals.warehouse.value += snapshot.quantity * totalUnitCost
+    totals.en_route = { quantity: 0, value: 0 }
+    totals.storage = { quantity: 0, value: 0 }
+    totals.production = { quantity: 0, value: 0 }
+
+    // Process ALL inventory including FBA (warehouse)
+    inventory.forEach((item) => {
+      // Map 'fba' location_type to 'warehouse' for display
+      const displayLocationType = item.location_type === 'fba' ? 'warehouse' : item.location_type
+
+      const totalUnitCost = item.unit_cost + item.unit_shipping_cost
+      totals[displayLocationType].quantity += item.quantity
+      totals[displayLocationType].value += item.quantity * totalUnitCost
     })
 
     return totals
-  }, [inventory, warehouseSnapshots])
+  }, [inventory])
 
   if (inventory.length === 0) {
     return (

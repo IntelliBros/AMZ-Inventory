@@ -12,11 +12,30 @@ interface Team {
   role: string
 }
 
+// Get cached team from localStorage
+const getCachedTeam = (): Partial<Team> | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const id = localStorage.getItem('current_team_id')
+    const name = localStorage.getItem('team_name')
+    if (id && name) {
+      return { id, name }
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+  return null
+}
+
 export default function Header() {
   const router = useRouter()
   const supabase = createClient()
   const [teams, setTeams] = useState<Team[]>([])
-  const [currentTeam, setCurrentTeam] = useState<Team | null>(null)
+  const [currentTeam, setCurrentTeam] = useState<Team | null>(() => {
+    // Initialize with cached team to prevent flash
+    const cached = getCachedTeam()
+    return cached ? { ...cached, owner_id: '', role: '' } as Team : null
+  })
   const [showDropdown, setShowDropdown] = useState(false)
   const [showNewTeamModal, setShowNewTeamModal] = useState(false)
   const [newTeamName, setNewTeamName] = useState('')
@@ -63,7 +82,11 @@ export default function Header() {
           : fetchedTeams[0]
 
         if (current) {
+          // Update with full team data including role and owner_id
           setCurrentTeam(current)
+          // Make sure localStorage is in sync
+          localStorage.setItem('current_team_id', current.id)
+          localStorage.setItem('team_name', current.name)
         }
       }
     } catch (err) {

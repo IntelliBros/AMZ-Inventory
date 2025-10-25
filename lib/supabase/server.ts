@@ -14,3 +14,6 @@ export function createServerClient() {
 
   return serverClient
 }
+
+// Export as createClient for backward compatibility
+export const createClient = createServerClient

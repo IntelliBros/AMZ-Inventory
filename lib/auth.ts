@@ -53,9 +53,9 @@ export async function createUser(email: string, password: string): Promise<{ id:
   const supabase = createClient()
   const passwordHash = await hashPassword(password)
 
-  // @ts-ignore - Supabase types don't recognize users table
   const { data, error } = await supabase
     .from('users')
+    // @ts-expect-error - Supabase types don't recognize users table
     .insert([{ email, password_hash: passwordHash }])
     .select('id, email')
     .single()

@@ -35,6 +35,7 @@ export async function PATCH(request: NextRequest) {
     // @ts-ignore
     const { data, error } = await supabase
       .from('users')
+      // @ts-ignore
       .update({ team_name: team_name.trim() })
       .eq('id', currentUser.id)
       .select()

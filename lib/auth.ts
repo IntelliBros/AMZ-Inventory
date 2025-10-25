@@ -149,5 +149,6 @@ export async function getUserRole(memberId: string, ownerId: string): Promise<'o
     .single()
 
   if (error || !data) return null
+  // @ts-ignore - Supabase types don't recognize team_members table
   return data.role as 'admin' | 'editor' | 'viewer'
 }

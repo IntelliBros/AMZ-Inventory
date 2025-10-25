@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Cannot add yourself as a team member
+    // @ts-ignore - Supabase types don't recognize users table
     if (memberUser.id === currentUser.id) {
       return NextResponse.json(
         { error: 'Cannot add yourself as a team member' },

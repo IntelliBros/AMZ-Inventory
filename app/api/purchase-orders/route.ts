@@ -5,7 +5,7 @@ import { cookies } from 'next/headers'
 
 export const runtime = 'nodejs'
 
-// POST /api/suppliers - Create a new supplier
+// POST /api/purchase-orders - Create a new purchase order
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = await cookies()
@@ -23,38 +23,47 @@ export async function POST(request: NextRequest) {
     const userIsViewer = await isViewer(currentUser.id)
     if (userIsViewer) {
       return NextResponse.json(
-        { error: 'You do not have permission to create suppliers. Viewers have read-only access.' },
+        { error: 'You do not have permission to create purchase orders. Viewers have read-only access.' },
         { status: 403 }
       )
     }
 
     const body = await request.json()
-    const { name, contact_person, email, phone, address, notes } = body
+    const {
+      po_number,
+      supplier_id,
+      order_date,
+      expected_delivery_date,
+      status,
+      notes,
+      total_product_cost,
+    } = body
 
-    if (!name) {
+    if (!po_number || !supplier_id) {
       return NextResponse.json(
-        { error: 'Supplier name is required' },
+        { error: 'PO number and supplier are required' },
         { status: 400 }
       )
     }
 
     const supabase = createServerClient()
 
-    const supplierData = {
-      name,
-      contact_person: contact_person || null,
-      email: email || null,
-      phone: phone || null,
-      address: address || null,
+    const poData = {
+      po_number,
+      supplier: supplier_id, // Column is named 'supplier' not 'supplier_id'
+      order_date: order_date || new Date().toISOString().split('T')[0],
+      expected_delivery_date: expected_delivery_date || null,
+      status: status || 'in_production',
+      total_product_cost: total_product_cost || 0,
       notes: notes || null,
       user_id: currentUser.id,
     }
 
-    // @ts-ignore - Supabase types don't recognize suppliers table
+    // @ts-ignore - Supabase types don't recognize purchase_orders table
     const { data, error } = await supabase
-      .from('suppliers')
-      // @ts-ignore - Supabase types don't recognize suppliers table
-      .insert([supplierData])
+      .from('purchase_orders')
+      // @ts-ignore - Supabase types don't recognize purchase_orders table
+      .insert([poData])
       .select()
       .single()
 
@@ -62,11 +71,11 @@ export async function POST(request: NextRequest) {
       throw error
     }
 
-    return NextResponse.json({ supplier: data })
+    return NextResponse.json({ purchase_order: data })
   } catch (error: any) {
-    console.error('Error creating supplier:', error)
+    console.error('Error creating purchase order:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to create supplier' },
+      { error: error.message || 'Failed to create purchase order' },
       { status: 500 }
     )
   }

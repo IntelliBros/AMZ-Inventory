@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Database } from '@/types/database.types'
 
@@ -26,7 +25,6 @@ interface ProductSnapshot {
 
 export default function WarehouseSnapshotModal({ snapshot, products, onClose }: WarehouseSnapshotModalProps) {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isBulkMode, setIsBulkMode] = useState(!snapshot) // Default to bulk mode for new snapshots
@@ -52,23 +50,8 @@ export default function WarehouseSnapshotModal({ snapshot, products, onClose }: 
     setLoading(true)
 
     try {
-      // Get current user from API
-      const userResponse = await fetch('/api/auth/me', {
-        credentials: 'include'
-      })
-
-      if (!userResponse.ok) {
-        throw new Error('User not authenticated')
-      }
-
-      const { user } = await userResponse.json()
-
-      if (!user) {
-        throw new Error('User not authenticated')
-      }
-
       if (isBulkMode && !snapshot) {
-        // Bulk mode: create snapshots for all products with quantity > 0
+        // Bulk mode: create snapshots for all products with quantity >= 0
         const snapshotsToCreate = productSnapshots.filter(ps => {
           const qty = parseInt(ps.quantity)
           return !isNaN(qty) && qty >= 0
@@ -78,44 +61,24 @@ export default function WarehouseSnapshotModal({ snapshot, products, onClose }: 
           throw new Error('Please enter quantities for at least one product')
         }
 
-        // Create all snapshots
+        // Create all snapshots via API
         const snapshotDataArray = snapshotsToCreate.map(ps => ({
           product_id: ps.product_id,
           snapshot_date: formData.snapshot_date,
           quantity: parseInt(ps.quantity),
           notes: formData.notes || null,
-          user_id: user.id,
         }))
 
-        const { data: newSnapshots, error: insertError } = await supabase
-          .from('warehouse_snapshots')
-          // @ts-ignore
-          .insert(snapshotDataArray)
-          .select()
+        const response = await fetch('/api/warehouse-snapshots', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ snapshots: snapshotDataArray }),
+        })
 
-        if (insertError) {
-          if (insertError.code === '23505') {
-            throw new Error('One or more snapshots already exist for the selected date. Please use a different date or edit existing snapshots.')
-          }
-          throw insertError
-        }
-
-        // Calculate and save sales records for each snapshot
-        if (newSnapshots) {
-          // @ts-ignore
-          for (const newSnapshot of newSnapshots) {
-            await calculateAndSaveSales(
-              // @ts-ignore
-              newSnapshot.id,
-              // @ts-ignore
-              newSnapshot.product_id,
-              // @ts-ignore
-              newSnapshot.snapshot_date,
-              // @ts-ignore
-              newSnapshot.quantity,
-              user.id
-            )
-          }
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to create warehouse snapshots')
         }
       } else {
         // Single mode
@@ -129,53 +92,34 @@ export default function WarehouseSnapshotModal({ snapshot, products, onClose }: 
           snapshot_date: formData.snapshot_date,
           quantity,
           notes: formData.notes || null,
-          user_id: user.id,
         }
 
         if (snapshot) {
-          // Update existing snapshot
-          const { error: updateError } = await supabase
-            .from('warehouse_snapshots')
-            // @ts-ignore
-            .update(snapshotData)
-            .eq('id', snapshot.id)
+          // Update existing snapshot via API
+          const response = await fetch(`/api/warehouse-snapshots/${snapshot.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(snapshotData),
+          })
 
-          if (updateError) throw updateError
-
-          // Recalculate sales for this snapshot
-          await calculateAndSaveSales(snapshot.id, formData.product_id, formData.snapshot_date, quantity, user.id)
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.error || 'Failed to update warehouse snapshot')
+          }
         } else {
-          // Check if a snapshot already exists for this product and date
-          const { data: existingSnapshot } = await supabase
-            .from('warehouse_snapshots')
-            .select('id')
-            .eq('product_id', formData.product_id)
-            .eq('snapshot_date', formData.snapshot_date)
-            .eq('user_id', user.id)
-            .single()
+          // Create new snapshot via API (single)
+          const response = await fetch('/api/warehouse-snapshots', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ snapshots: [snapshotData] }),
+          })
 
-          if (existingSnapshot) {
-            throw new Error('A snapshot already exists for this product and date. Please edit the existing snapshot or choose a different date.')
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.error || 'Failed to create warehouse snapshot')
           }
-
-          // Create new snapshot
-          const { data: newSnapshot, error: insertError } = await supabase
-            .from('warehouse_snapshots')
-            // @ts-ignore
-            .insert([snapshotData])
-            .select()
-            .single()
-
-          if (insertError) {
-            if (insertError.code === '23505') {
-              throw new Error('A snapshot already exists for this product and date. Please edit the existing snapshot or choose a different date.')
-            }
-            throw insertError
-          }
-
-          // Calculate and save sales record
-          // @ts-ignore
-          await calculateAndSaveSales(newSnapshot.id, formData.product_id, formData.snapshot_date, quantity, user.id)
         }
       }
 
@@ -196,98 +140,6 @@ export default function WarehouseSnapshotModal({ snapshot, products, onClose }: 
     )
   }
 
-  const calculateAndSaveSales = async (
-    snapshotId: string,
-    productId: string,
-    currentDate: string,
-    currentQuantity: number,
-    userId: string
-  ) => {
-    // Get previous snapshot for this product
-    // @ts-ignore
-    const { data: previousSnapshot } = await supabase
-      .from('warehouse_snapshots')
-      .select('*')
-      .eq('product_id', productId)
-      .lt('snapshot_date', currentDate)
-      .order('snapshot_date', { ascending: false })
-      .limit(1)
-      .single()
-
-    if (!previousSnapshot) {
-      // No previous snapshot, can't calculate sales yet
-      return
-    }
-
-    // Get the cumulative total_delivered at the time of the previous snapshot
-    // We need to calculate how much was delivered BETWEEN the two snapshots
-    // @ts-ignore
-    const { data: deliveredShipments } = await supabase
-      .from('shipping_line_items')
-      .select(`
-        quantity,
-        shipping_invoices!inner (
-          status,
-          shipping_date
-        )
-      `)
-      .eq('product_id', productId)
-      .eq('shipping_invoices.status', 'delivered')
-      // @ts-ignore
-      .gte('shipping_invoices.shipping_date', previousSnapshot.snapshot_date)
-      .lte('shipping_invoices.shipping_date', currentDate)
-    // @ts-ignore
-    const unitsDeliveredInPeriod = deliveredShipments?.reduce((sum, item) => sum + item.quantity, 0) || 0
-
-    // Calculate units sold between snapshots
-    // Formula: units_sold = (previous_snapshot + units_delivered_in_period) - current_snapshot
-    // Example: Previous was 100, delivered 50, current is 120 -> sold = (100 + 50) - 120 = 30
-    // @ts-ignore
-    const unitsSold = (previousSnapshot.quantity + unitsDeliveredInPeriod) - currentQuantity
-
-    // Only create sales record if units sold is positive or zero (allow zero for tracking)
-    if (unitsSold >= 0) {
-      // Check if sales record already exists for this period
-      const { data: existingSalesRecord } = await supabase
-        .from('sales_records')
-        .select('id')
-        .eq('product_id', productId)
-        // @ts-ignore
-        .eq('start_date', previousSnapshot.snapshot_date)
-        .eq('end_date', currentDate)
-        .single()
-
-      const salesData = {
-        product_id: productId,
-        // @ts-ignore
-        start_date: previousSnapshot.snapshot_date,
-        end_date: currentDate,
-        units_sold: unitsSold,
-        // @ts-ignore
-        starting_inventory: previousSnapshot.quantity,
-        ending_inventory: currentQuantity,
-        units_received: unitsDeliveredInPeriod,
-        user_id: userId,
-      }
-
-      if (existingSalesRecord) {
-        // Update existing record
-        await supabase
-          .from('sales_records')
-          // @ts-ignore
-          .update(salesData)
-          // @ts-ignore
-          .eq('id', existingSalesRecord.id)
-      } else {
-        // Create new record
-        await supabase
-          .from('sales_records')
-          // @ts-ignore
-          .insert([salesData])
-      }
-    }
-  }
-
   const handleDelete = async () => {
     if (!snapshot) return
 
@@ -299,12 +151,15 @@ export default function WarehouseSnapshotModal({ snapshot, products, onClose }: 
     setError(null)
 
     try {
-      const { error: deleteError } = await supabase
-        .from('warehouse_snapshots')
-        .delete()
-        .eq('id', snapshot.id)
+      const response = await fetch(`/api/warehouse-snapshots/${snapshot.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
 
-      if (deleteError) throw deleteError
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete warehouse snapshot')
+      }
 
       router.refresh()
       onClose()

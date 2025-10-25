@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -30,13 +31,34 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const [teamName, setTeamName] = useState('Amazon FBA')
+
+  useEffect(() => {
+    fetchTeamName()
+  }, [])
+
+  const fetchTeamName = async () => {
+    try {
+      const response = await fetch('/api/team/settings', {
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        const { team_name } = await response.json()
+        setTeamName(team_name || 'Amazon FBA')
+      }
+    } catch (err) {
+      console.error('Error fetching team name:', err)
+      // Keep default name on error
+    }
+  }
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-[#232F3E] flex flex-col shadow-lg z-10">
       {/* Logo Section */}
       <div className="p-6 border-b border-gray-700">
         <h1 className="text-lg font-bold text-white">
-          Amazon FBA
+          {teamName}
           <span className="block text-sm font-normal text-gray-300 mt-1">Inventory Manager</span>
         </h1>
       </div>

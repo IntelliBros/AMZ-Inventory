@@ -78,7 +78,8 @@ export async function createUser(email: string, password: string): Promise<{ id:
     .single()
 
   if (verifyError || !verifyData) {
-    console.error('CRITICAL: User was inserted but cannot be found!', { verifyError, userId: data.id })
+    // @ts-ignore - data might be typed as never due to Supabase types
+    console.error('CRITICAL: User was inserted but cannot be found!', { verifyError, userId: data?.id })
     throw new Error('User creation verification failed - user not found after insert')
   }
 
@@ -175,3 +176,38 @@ export async function getUserRole(memberId: string, ownerId: string): Promise<'o
   // @ts-ignore - Supabase types don't recognize team_members table
   return data.role as 'admin' | 'editor' | 'viewer'
 }
+
+// Check if user has write permissions for a resource owned by ownerId
+export async function hasWritePermission(currentUserId: string, resourceOwnerId: string): Promise<boolean> {
+  // If accessing own resources, always have write permission
+  if (currentUserId === resourceOwnerId) return true
+
+  // Check team member role
+  const role = await getUserRole(currentUserId, resourceOwnerId)
+
+  // Only 'owner', 'admin', and 'editor' have write permissions
+  // 'viewer' only has read access
+  return role === 'admin' || role === 'editor'
+}
+
+// Check if user is a viewer on ANY team (no write access anywhere except own resources)
+export async function isViewer(userId: string): Promise<boolean> {
+  const supabase = createServerClient()
+
+  // Check if user has any team memberships
+  // @ts-ignore
+  const { data: memberships } = await supabase
+    .from('team_members')
+    .select('role')
+    .eq('member_id', userId)
+
+  if (!memberships || memberships.length === 0) {
+    // Not a team member, so they can write to their own resources
+    return false
+  }
+
+  // If ALL memberships are 'viewer', then they're a viewer-only user
+  // @ts-ignore
+  return memberships.every(m => m.role === 'viewer')
+}
+

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database.types'
 import ShippingInvoiceModal from './ShippingInvoiceModal'
 
@@ -44,7 +43,6 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [updating, setUpdating] = useState<string | null>(null)
   const router = useRouter()
-  const supabase = createClient()
 
   const handleEdit = (invoice: ShippingInvoice) => {
     setSelectedInvoice(invoice)
@@ -59,65 +57,25 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
   const handleMarkAsDelivered = async (invoice: ShippingInvoice, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent opening the edit modal
 
-    if (!confirm(`Mark shipment ${invoice.invoice_number} as delivered? This will update total delivered units.`)) {
+    if (!confirm(`Mark shipment ${invoice.invoice_number} as delivered? This will move inventory to FBA.`)) {
       return
     }
 
     setUpdating(invoice.id)
 
     try {
-      // Update shipment status to delivered
-      const updateData = {
-        status: 'delivered' as const
-      } satisfies Database['public']['Tables']['shipping_invoices']['Update']
+      // Update shipment status to delivered via API
+      const response = await fetch(`/api/shipping-invoices/${invoice.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'delivered' }),
+      })
 
-
-
-      const { error: updateError } = await supabase
-        .from('shipping_invoices')
-        // @ts-ignore
-          .update(updateData)
-        .eq('id', invoice.id)
-
-      if (updateError) throw updateError
-
-      // Update total_delivered for each product in this shipment
-      for (const lineItem of invoice.shipping_line_items) {
-        // @ts-ignore
-        const { error: productError } = await supabase.rpc('increment_total_delivered', {
-          p_product_id: lineItem.product_id,
-          p_quantity: lineItem.quantity
-        })
-
-        if (productError) {
-          // If RPC doesn't exist yet, fall back to manual update
-          const { data: product } = await supabase
-            .from('products')
-            .select('total_delivered')
-            .eq('id', lineItem.product_id)
-            .single()
-
-          if (product) {
-
-            const { error: updateProductError } = await supabase
-              .from('products')
-              // @ts-ignore
-              .update({ total_delivered: (product.total_delivered || 0) + lineItem.quantity })
-              .eq('id', lineItem.product_id)
-
-            if (updateProductError) throw updateProductError
-          }
-        }
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to mark as delivered')
       }
-
-      // Remove en_route inventory (delivered units are now tracked in total_delivered)
-      const { error: inventoryError } = await supabase
-        .from('inventory_locations')
-        .delete()
-        .like('notes', `Shipment ${invoice.invoice_number}%`)
-        .eq('location_type', 'en_route')
-
-      if (inventoryError) throw inventoryError
 
       router.refresh()
     } catch (err: any) {

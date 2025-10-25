@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, hasWritePermission } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
@@ -35,6 +35,30 @@ export async function PATCH(
 
     const supabase = createServerClient()
 
+    // Check permissions first
+    // @ts-ignore
+    const { data: supplier, error: supplierError } = await supabase
+      .from('suppliers')
+      .select('user_id')
+      .eq('id', id)
+      .single()
+
+    if (supplierError || !supplier) {
+      return NextResponse.json(
+        { error: 'Supplier not found' },
+        { status: 404 }
+      )
+    }
+
+    // @ts-ignore
+    const canWrite = await hasWritePermission(currentUser.id, supplier.user_id)
+    if (!canWrite) {
+      return NextResponse.json(
+        { error: 'You do not have permission to update suppliers' },
+        { status: 403 }
+      )
+    }
+
     const supplierData = {
       name,
       contact_person: contact_person || null,
@@ -50,7 +74,6 @@ export async function PATCH(
       // @ts-ignore - Supabase types don't recognize suppliers table
       .update(supplierData)
       .eq('id', id)
-      .eq('user_id', currentUser.id)
       .select()
       .single()
 
@@ -93,12 +116,35 @@ export async function DELETE(
     const { id } = await params
     const supabase = createServerClient()
 
+    // Check permissions first
+    // @ts-ignore
+    const { data: supplier, error: supplierError } = await supabase
+      .from('suppliers')
+      .select('user_id')
+      .eq('id', id)
+      .single()
+
+    if (supplierError || !supplier) {
+      return NextResponse.json(
+        { error: 'Supplier not found' },
+        { status: 404 }
+      )
+    }
+
+    // @ts-ignore
+    const canWrite = await hasWritePermission(currentUser.id, supplier.user_id)
+    if (!canWrite) {
+      return NextResponse.json(
+        { error: 'You do not have permission to delete suppliers' },
+        { status: 403 }
+      )
+    }
+
     // @ts-ignore - Supabase types don't recognize suppliers table
     const { error } = await supabase
       .from('suppliers')
       .delete()
       .eq('id', id)
-      .eq('user_id', currentUser.id)
 
     if (error) throw error
 

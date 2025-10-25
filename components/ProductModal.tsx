@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Database } from '@/types/database.types'
 
@@ -14,7 +13,6 @@ interface ProductModalProps {
 
 export default function ProductModal({ product, onClose }: ProductModalProps) {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -38,21 +36,6 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
     setLoading(true)
 
     try {
-      // Get current user from API
-      const userResponse = await fetch('/api/auth/me', {
-        credentials: 'include'
-      })
-
-      if (!userResponse.ok) {
-        throw new Error('User not authenticated')
-      }
-
-      const { user } = await userResponse.json()
-
-      if (!user) {
-        throw new Error('User not authenticated')
-      }
-
       const productData = {
         sku: formData.sku,
         name: formData.name,
@@ -66,30 +49,34 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
         carton_height_cm: formData.carton_height_cm ? parseFloat(formData.carton_height_cm) : null,
         carton_weight_kg: formData.carton_weight_kg ? parseFloat(formData.carton_weight_kg) : null,
         units_per_carton: formData.units_per_carton ? parseInt(formData.units_per_carton) : null,
-        user_id: user.id,
       }
 
       if (product) {
-        // Update existing product
-        const updateData = productData satisfies Database['public']['Tables']['products']['Update']
+        // Update existing product via API
+        const response = await fetch(`/api/products/${product.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(productData),
+        })
 
-
-        const { error: updateError } = await supabase
-          .from('products')
-          // @ts-ignore
-          .update(updateData)
-          .eq('id', product.id)
-        if (updateError) throw updateError
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to update product')
+        }
       } else {
-        // Create new product
-        const insertData = productData satisfies Database['public']['Tables']['products']['Insert']
+        // Create new product via API
+        const response = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(productData),
+        })
 
-
-        const { error: insertError } = await supabase
-          .from('products')
-          // @ts-ignore
-          .insert([insertData])
-        if (insertError) throw insertError
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to create product')
+        }
       }
 
       router.refresh()
@@ -112,12 +99,15 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
     setError(null)
 
     try {
-      const { error: deleteError } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', product.id)
+      const response = await fetch(`/api/products/${product.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
 
-      if (deleteError) throw deleteError
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete product')
+      }
 
       router.refresh()
       onClose()

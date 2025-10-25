@@ -32,9 +32,33 @@ export default function TeamManagement({ currentUser }: TeamManagementProps) {
   const [newMemberEmail, setNewMemberEmail] = useState('')
   const [newMemberRole, setNewMemberRole] = useState<'admin' | 'editor' | 'viewer'>('viewer')
 
+  // Team name state
+  const [teamName, setTeamName] = useState('')
+  const [isEditingTeamName, setIsEditingTeamName] = useState(false)
+  const [teamNameLoading, setTeamNameLoading] = useState(false)
+
   useEffect(() => {
     fetchTeamMembers()
+    fetchTeamSettings()
   }, [])
+
+  const fetchTeamSettings = async () => {
+    try {
+      const response = await fetch('/api/team/settings', {
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch team settings')
+      }
+
+      const { team_name } = await response.json()
+      setTeamName(team_name || 'Amazon FBA')
+    } catch (err: any) {
+      console.error('Error fetching team settings:', err)
+      setTeamName('Amazon FBA')
+    }
+  }
 
   const fetchTeamMembers = async () => {
     try {
@@ -141,6 +165,37 @@ export default function TeamManagement({ currentUser }: TeamManagementProps) {
     }
   }
 
+  const handleUpdateTeamName = async () => {
+    if (!teamName.trim()) {
+      setError('Team name cannot be empty')
+      return
+    }
+
+    try {
+      setError(null)
+      setTeamNameLoading(true)
+      const response = await fetch('/api/team/settings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ team_name: teamName.trim() }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update team name')
+      }
+
+      setIsEditingTeamName(false)
+      router.refresh()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setTeamNameLoading(false)
+    }
+  }
+
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin':
@@ -174,6 +229,59 @@ export default function TeamManagement({ currentUser }: TeamManagementProps) {
           <p className="text-red-800">{error}</p>
         </div>
       )}
+
+      {/* Team Name Editor */}
+      <div className="bg-white border border-gray-200 rounded-md p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Team Name
+            </label>
+            {isEditingTeamName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#FF9900]"
+                  placeholder="Enter team name"
+                  disabled={teamNameLoading}
+                />
+                <button
+                  onClick={handleUpdateTeamName}
+                  disabled={teamNameLoading}
+                  className="px-4 py-2 bg-[#FF9900] text-white rounded-md hover:bg-[#e88b00] disabled:opacity-50 transition-colors"
+                >
+                  {teamNameLoading ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsEditingTeamName(false)
+                    fetchTeamSettings()
+                  }}
+                  disabled={teamNameLoading}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <p className="text-lg font-semibold text-gray-900">{teamName}</p>
+                <button
+                  onClick={() => setIsEditingTeamName(true)}
+                  className="text-sm text-[#FF9900] hover:text-[#e88b00]"
+                >
+                  Edit
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              This name will appear in the sidebar and throughout the app.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Add Member Button */}
       <div className="flex justify-end">

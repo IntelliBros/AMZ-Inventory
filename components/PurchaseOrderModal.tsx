@@ -114,51 +114,19 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
   const handleStatusChange = async (poId: string, oldStatus: POStatus | null, newStatus: POStatus) => {
     if (!oldStatus || oldStatus === newStatus) return
 
-    // Get PO number for notes
-    const { data: po } = await supabase
-      .from('purchase_orders')
-      .select('po_number')
-      .eq('id', poId)
-      .single() as { data: { po_number: string } | null }
+    const response = await fetch(`/api/purchase-orders/${poId}/change-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        old_status: oldStatus,
+        new_status: newStatus,
+      }),
+    })
 
-    if (!po) return
-
-    // If marking as in_storage (complete), move all inventory from production to storage
-    if (oldStatus === 'in_production' && newStatus === 'in_storage') {
-      const updateData = {
-        location_type: 'storage' as const,
-        notes: `PO ${po.po_number} Complete`
-      } satisfies Database['public']['Tables']['inventory_locations']['Update']
-
-
-
-      const { error } = await supabase
-        .from('inventory_locations')
-        // @ts-ignore
-      .update(updateData)
-        .eq('po_id', poId)
-        .eq('location_type', 'production')
-
-      if (error) throw error
-    }
-
-    // If changing back from in_storage to in_production, move inventory back
-    if (oldStatus === 'in_storage' && newStatus === 'in_production') {
-      const updateData = {
-        location_type: 'production' as const,
-        notes: `PO ${po.po_number} In Production`
-      } satisfies Database['public']['Tables']['inventory_locations']['Update']
-
-
-
-      const { error } = await supabase
-        .from('inventory_locations')
-        // @ts-ignore
-      .update(updateData)
-        .eq('po_id', poId)
-        .eq('location_type', 'storage')
-
-      if (error) throw error
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to change status')
     }
   }
 
@@ -168,21 +136,6 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
     setLoading(true)
 
     try {
-      // Get current user from API
-      const userResponse = await fetch('/api/auth/me', {
-        credentials: 'include'
-      })
-
-      if (!userResponse.ok) {
-        throw new Error('User not authenticated')
-      }
-
-      const { user } = await userResponse.json()
-
-      if (!user) {
-        throw new Error('User not authenticated')
-      }
-
       // Validate line items
       if (lineItems.length === 0 || lineItems.some(item => !item.product_id || item.quantity <= 0)) {
         throw new Error('Please add at least one valid line item')
@@ -192,94 +145,93 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
 
       const poData = {
         po_number: formData.po_number,
-        supplier: formData.supplier,
+        supplier_id: formData.supplier,
         order_date: formData.order_date,
         expected_delivery_date: formData.expected_delivery_date || null,
         status: formData.status,
         total_product_cost: totals.productTotal,
         notes: formData.notes || null,
-        user_id: user.id,
       }
 
       if (purchaseOrder) {
-        // Update existing PO
-        const updateData = poData satisfies Database['public']['Tables']['purchase_orders']['Update']
+        // Update existing PO via API
+        const response = await fetch(`/api/purchase-orders/${purchaseOrder.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(poData),
+        })
 
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to update purchase order')
+        }
 
+        // Delete old line items via API
+        const deleteResponse = await fetch(`/api/po-line-items?po_id=${purchaseOrder.id}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        })
 
-        const { error: updateError } = await supabase
-          .from('purchase_orders')
-          // @ts-ignore
-      .update(updateData)
-          .eq('id', purchaseOrder.id)
+        if (!deleteResponse.ok) {
+          const error = await deleteResponse.json()
+          throw new Error(error.error || 'Failed to delete line items')
+        }
 
-        if (updateError) throw updateError
+        // Insert new line items via API
+        const lineItemsResponse = await fetch('/api/po-line-items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            po_id: purchaseOrder.id,
+            line_items: lineItems,
+          }),
+        })
 
-        // Delete old line items
-        const { error: deleteError } = await supabase
-          .from('po_line_items')
-          .delete()
-          .eq('po_id', purchaseOrder.id)
-
-        if (deleteError) throw deleteError
-
-        // Insert new line items
-        const lineItemsData = lineItems.map(item => ({
-          po_id: purchaseOrder.id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_cost: item.unit_cost,
-          total_cost: item.quantity * item.unit_cost,
-        })) satisfies Database['public']['Tables']['po_line_items']['Insert'][]
-
-
-
-        const { error: lineItemsError } = await supabase
-          .from('po_line_items')
-          // @ts-ignore
-          .insert(lineItemsData)
-
-        if (lineItemsError) throw lineItemsError
+        if (!lineItemsResponse.ok) {
+          const error = await lineItemsResponse.json()
+          throw new Error(error.error || 'Failed to create line items')
+        }
 
         // Handle status change: update inventory locations if status changed
         if (previousStatus !== formData.status) {
           await handleStatusChange(purchaseOrder.id, previousStatus, formData.status as POStatus)
         }
       } else {
-        // Create new PO
-        const insertData = poData satisfies Database['public']['Tables']['purchase_orders']['Insert']
+        // Create new PO via API
+        const response = await fetch('/api/purchase-orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(poData),
+        })
 
-        const { data: newPO, error: insertError } = await supabase
-          .from('purchase_orders')
-          // @ts-ignore
-          .insert([insertData])
-          .select()
-          .single()
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to create purchase order')
+        }
 
-        if (insertError) throw insertError
+        const { purchase_order: newPO } = await response.json()
         if (!newPO) throw new Error('Failed to create purchase order')
 
-        // Insert line items
-        const lineItemsData = lineItems.map(item => ({
-          // @ts-ignore
-          po_id: newPO.id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_cost: item.unit_cost,
-          total_cost: item.quantity * item.unit_cost,
-        })) satisfies Database['public']['Tables']['po_line_items']['Insert'][]
+        // Insert line items via API
+        const lineItemsResponse = await fetch('/api/po-line-items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            po_id: newPO.id,
+            line_items: lineItems,
+          }),
+        })
 
+        if (!lineItemsResponse.ok) {
+          const error = await lineItemsResponse.json()
+          throw new Error(error.error || 'Failed to create line items')
+        }
 
-
-        const { error: lineItemsError } = await supabase
-          .from('po_line_items')
-          // @ts-ignore
-          .insert(lineItemsData)
-
-        if (lineItemsError) throw lineItemsError
-
-        // AUTO-CREATE INVENTORY for new PO
-        // Create inventory records for each line item with location_type based on status
+        // AUTO-CREATE INVENTORY for new PO via API
         const locationType: 'production' | 'storage' = formData.status === 'in_production' ? 'production' : 'storage'
         const statusNote = formData.status === 'in_production' ? 'In Production' : 'Complete'
         const inventoryData = lineItems.map(item => ({
@@ -287,20 +239,22 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
           location_type: locationType,
           quantity: item.quantity,
           unit_cost: item.unit_cost,
-          unit_shipping_cost: 0, // Shipping cost added separately via shipping invoices
-          // @ts-ignore
+          unit_shipping_cost: 0,
           po_id: newPO.id,
           notes: `PO ${formData.po_number} ${statusNote}`,
-        })) satisfies Database['public']['Tables']['inventory_locations']['Insert'][]
+        }))
 
+        const inventoryResponse = await fetch('/api/inventory-locations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ locations: inventoryData }),
+        })
 
-
-        const { error: inventoryError } = await supabase
-          .from('inventory_locations')
-          // @ts-ignore
-          .insert(inventoryData)
-
-        if (inventoryError) throw inventoryError
+        if (!inventoryResponse.ok) {
+          const error = await inventoryResponse.json()
+          throw new Error(error.error || 'Failed to create inventory locations')
+        }
       }
 
       router.refresh()

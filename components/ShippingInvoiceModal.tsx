@@ -90,19 +90,15 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
     const fetchStorageInventory = async () => {
       setLoadingInventory(true)
       try {
-        const { data, error } = await supabase
-          .from('inventory_locations')
-          .select(`
-            product_id,
-            quantity,
-            products (
-              name,
-              sku
-            )
-          `)
-          .eq('location_type', 'storage')
+        const response = await fetch('/api/inventory-locations?location_type=storage', {
+          credentials: 'include',
+        })
 
-        if (error) throw error
+        if (!response.ok) {
+          throw new Error('Failed to fetch storage inventory')
+        }
+
+        const { locations: data } = await response.json()
 
         // Aggregate by product
         const aggregated: Record<string, StorageInventory> = {}
@@ -173,10 +169,13 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
       const storage = storageInventory.find(s => s.product_id === productId)
       updated[index].available_quantity = storage?.total_available || 0
 
-      // Calculate chargeable weight per unit
+      // Calculate chargeable weight per unit and unit shipping cost
       const product = products.find(p => p.id === productId)
       if (product) {
-        updated[index].chargeable_weight = calculateChargeableWeight(product)
+        const chargeableWeight = calculateChargeableWeight(product)
+        updated[index].chargeable_weight = chargeableWeight
+        // Unit shipping cost = chargeable weight * cost per kg
+        updated[index].unit_shipping_cost = chargeableWeight * (product.current_shipping_cost || 0)
       }
 
       // Set quantity to available if not set
@@ -236,23 +235,18 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
     return lineItems.reduce((sum, item) => sum + (item.chargeable_weight * item.quantity), 0)
   }
 
-  // Handle status change: convert inventory
-  const handleStatusChange = async (shipmentInvoiceNumber: string, oldStatus: ShipmentStatus | null, newStatus: ShipmentStatus) => {
-    if (!oldStatus || oldStatus === newStatus) return
+  // Handle status change: convert inventory via API
+  const handleStatusChange = async (invoiceId: string, newStatus: ShipmentStatus) => {
+    const response = await fetch(`/api/shipping-invoices/${invoiceId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ status: newStatus }),
+    })
 
-    // If changing to delivered, convert inventory from en_route to warehouse
-    if (newStatus === 'delivered') {
-      const { error } = await supabase
-        .from('inventory_locations')
-        // @ts-ignore
-        .update({
-          location_type: 'warehouse',
-          notes: `Shipment ${shipmentInvoiceNumber} Delivered`
-        })
-        .like('notes', `Shipment ${shipmentInvoiceNumber}%`)
-        .eq('location_type', 'en_route')
-
-      if (error) throw error
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to update shipping invoice')
     }
   }
 
@@ -262,21 +256,6 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
     setLoading(true)
 
     try {
-      // Get current user from API
-      const userResponse = await fetch('/api/auth/me', {
-        credentials: 'include'
-      })
-
-      if (!userResponse.ok) {
-        throw new Error('User not authenticated')
-      }
-
-      const { user } = await userResponse.json()
-
-      if (!user) {
-        throw new Error('User not authenticated')
-      }
-
       // Validate line items
       if (lineItems.length === 0 || lineItems.some(item => !item.product_id || item.quantity <= 0)) {
         throw new Error('Please add at least one valid product with quantity')
@@ -292,53 +271,35 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
         status: formData.status,
         total_shipping_cost: shippingTotal,
         notes: formData.notes || null,
-        user_id: user.id,
       }
 
       if (shippingInvoice) {
-        // Update existing invoice
-        const { error: updateError } = await supabase
-          .from('shipping_invoices')
-          // @ts-ignore
-          .update(invoiceData)
-          .eq('id', shippingInvoice.id)
-
-        if (updateError) throw updateError
-
-        // Handle status change
-        if (previousStatus !== formData.status) {
-          await handleStatusChange(shippingInvoice.invoice_number, previousStatus, formData.status)
-        }
+        // Update existing invoice via API
+        await handleStatusChange(shippingInvoice.id, formData.status)
       } else {
-        // Create new shipment
-        const { data: newInvoice, error: insertError } = await supabase
-          .from('shipping_invoices')
-          // @ts-ignore
-          .insert([invoiceData])
-          .select()
-          .single()
+        // Create new shipment via API
+        const response = await fetch('/api/shipping-invoices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            ...invoiceData,
+            line_items: lineItems.map(item => ({
+              product_id: item.product_id,
+              quantity: item.quantity,
+              chargeable_weight: item.chargeable_weight,
+              unit_shipping_cost: item.unit_shipping_cost,
+            })),
+          }),
+        })
 
-        if (insertError) throw insertError
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to create shipping invoice')
+        }
 
-        // Insert line items
-        const lineItemsData = lineItems.map(item => ({
-          // @ts-ignore
-          shipping_invoice_id: newInvoice.id,
-          product_id: item.product_id,
-          po_line_item_id: null, // No longer linking to PO
-          quantity: item.quantity,
-          unit_shipping_cost: item.unit_shipping_cost,
-          total_shipping_cost: item.quantity * item.unit_shipping_cost,
-        }))
-
-        const { error: lineItemsError } = await supabase
-          .from('shipping_line_items')
-          // @ts-ignore
-          .insert(lineItemsData)
-
-        if (lineItemsError) throw lineItemsError
-
-        // Convert inventory from storage to en_route
+        // Skip the old direct Supabase code - commented out for reference
+        /*
         for (const item of lineItems) {
           // Find storage inventory for this product (FIFO)
           // @ts-ignore
@@ -397,6 +358,7 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
 
           if (inventoryError) throw inventoryError
         }
+        */
       }
 
       router.refresh()
@@ -419,12 +381,15 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
     setError(null)
 
     try {
-      const { error: deleteError } = await supabase
-        .from('shipping_invoices')
-        .delete()
-        .eq('id', shippingInvoice.id)
+      const response = await fetch(`/api/shipping-invoices/${shippingInvoice.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
 
-      if (deleteError) throw deleteError
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete shipping invoice')
+      }
 
       router.refresh()
       onClose()

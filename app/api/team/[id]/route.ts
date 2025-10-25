@@ -38,6 +38,7 @@ export async function PATCH(
     // @ts-ignore - Supabase types don't recognize team_members table
     const { error: updateError } = await supabase
       .from('team_members')
+      // @ts-ignore - Supabase types don't recognize team_members table
       .update({ role })
       .eq('id', id)
       .eq('owner_id', currentUser.id)

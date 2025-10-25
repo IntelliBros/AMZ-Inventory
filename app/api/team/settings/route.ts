@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId, hasTeamWritePermission } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
@@ -19,6 +19,26 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
+    // Get current team ID from cookie
+    const teamIdCookie = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(teamIdCookie, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
+    // Check write permissions (only owner/admin can rename team)
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
+    if (!canWrite) {
+      return NextResponse.json(
+        { error: 'You do not have permission to update team settings' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { team_name } = body
 
@@ -31,20 +51,17 @@ export async function PATCH(request: NextRequest) {
 
     const supabase = createServerClient()
 
-    // Update the user's team name
-    // @ts-ignore
-    const { data, error } = await supabase
-      .from('users')
-      // @ts-ignore
-      .update({ team_name: team_name.trim() })
-      .eq('id', currentUser.id)
+    // Update the current team's name
+    const { data, error } = await (supabase as any)
+      .from('teams')
+      .update({ name: team_name.trim() })
+      .eq('id', currentTeamId)
       .select()
       .single()
 
     if (error) throw error
 
-    // @ts-ignore
-    return NextResponse.json({ success: true, team_name: data.team_name })
+    return NextResponse.json({ success: true, team_name: data.name })
   } catch (error: any) {
     console.error('Error updating team settings:', error)
     return NextResponse.json(
@@ -68,20 +85,29 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Get current team ID from cookie
+    const teamIdCookie = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(teamIdCookie, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const supabase = createServerClient()
 
-    // Get the user's team name
-    // @ts-ignore
+    // Get the current team's name
     const { data, error } = await supabase
-      .from('users')
-      .select('team_name')
-      .eq('id', currentUser.id)
-      .single()
+      .from('teams')
+      .select('name')
+      .eq('id', currentTeamId)
+      .single<{ name: string }>()
 
     if (error) throw error
 
-    // @ts-ignore
-    return NextResponse.json({ team_name: data?.team_name || 'Amazon FBA' })
+    return NextResponse.json({ team_name: data?.name || 'Amazon FBA' })
   } catch (error: any) {
     console.error('Error fetching team settings:', error)
     return NextResponse.json(

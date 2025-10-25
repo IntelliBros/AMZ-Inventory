@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
 export const runtime = 'nodejs'
 
-// GET /api/team - List all team members for the current user's account
+// GET /api/team - List all team members for the current team
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies()
@@ -19,19 +19,30 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Get current team ID from cookie
+    const teamIdCookie = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(teamIdCookie, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const supabase = createServerClient()
 
-    // @ts-ignore - Supabase types don't recognize team_members table
+    // Get all members of the current team
     const { data: teamMembers, error } = await supabase
-      .from('team_members')
+      .from('team_users')
       .select(`
         *,
-        member:users!team_members_member_id_fkey (
+        member:users!team_users_user_id_fkey (
           id,
           email
         )
       `)
-      .eq('owner_id', currentUser.id)
+      .eq('team_id', currentTeamId)
 
     if (error) throw error
 
@@ -59,6 +70,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Get current team ID from cookie
+    const teamIdCookie = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(teamIdCookie, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const { memberEmail, role } = await request.json()
 
     if (!memberEmail || !role) {
@@ -78,12 +100,11 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient()
 
     // Find the user by email
-    // @ts-ignore - Supabase types don't recognize users table
     const { data: memberUser, error: findError } = await supabase
       .from('users')
       .select('id, email')
       .eq('email', memberEmail)
-      .single()
+      .single<{ id: string; email: string }>()
 
     if (findError || !memberUser) {
       return NextResponse.json(
@@ -93,7 +114,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Cannot add yourself as a team member
-    // @ts-ignore - Supabase types don't recognize users table
     if (memberUser.id === currentUser.id) {
       return NextResponse.json(
         { error: 'Cannot add yourself as a team member' },
@@ -101,16 +121,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Add team member
-    // @ts-ignore - Supabase types don't recognize team_members table
-    const { data: teamMember, error: insertError } = await supabase
-      .from('team_members')
-      // @ts-ignore - Supabase types don't recognize team_members table
+    // Add team member to the current team
+    const { data: teamMember, error: insertError } = await (supabase as any)
+      .from('team_users')
       .insert([
         {
-          owner_id: currentUser.id,
-          // @ts-ignore - Supabase types don't recognize users table
-          member_id: memberUser.id,
+          team_id: currentTeamId,
+          user_id: memberUser.id,
           role: role,
         },
       ])

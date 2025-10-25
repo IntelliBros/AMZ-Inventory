@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
 import Dashboard from '@/components/Dashboard'
@@ -19,10 +19,15 @@ export default async function HomePage() {
     throw new Error('Not authenticated')
   }
 
-  // Get accessible user IDs (own ID + team member access)
-  const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
+  // Get current team ID from cookie
+  const teamIdCookie = cookieStore.get('current-team-id')?.value
+  const currentTeamId = await getCurrentTeamId(teamIdCookie, currentUser.id)
 
-  // Get all inventory with product details (filtered by accessible users)
+  if (!currentTeamId) {
+    throw new Error('No team access found')
+  }
+
+  // Get all inventory with product details (filtered by team)
   const { data: inventory } = await supabase
     .from('inventory_locations')
     .select(`
@@ -36,15 +41,15 @@ export default async function HomePage() {
         user_id
       )
     `)
-    .in('products.user_id', accessibleUserIds)
+    .eq('products.team_id', currentTeamId)
 
-  // Get all products (filtered by accessible users)
+  // Get all products (filtered by team)
   const { data: products } = await supabase
     .from('products')
     .select('*')
-    .in('user_id', accessibleUserIds)
+    .eq('team_id', currentTeamId)
 
-  // Get all purchase orders (filtered by accessible users)
+  // Get all purchase orders (filtered by team)
   const { data: purchaseOrders } = await supabase
     .from('purchase_orders')
     .select(`
@@ -54,17 +59,17 @@ export default async function HomePage() {
         unit_cost
       )
     `)
-    .in('user_id', accessibleUserIds)
+    .eq('team_id', currentTeamId)
 
-  // Get recent sales records for dashboard (filtered by accessible users)
+  // Get recent sales records for dashboard (filtered by team)
   const { data: salesRecords } = await supabase
     .from('sales_records')
     .select('*')
-    .in('user_id', accessibleUserIds)
+    .eq('team_id', currentTeamId)
     .order('end_date', { ascending: false })
     .limit(30)
 
-  // Get latest warehouse snapshots for each product (filtered by accessible users)
+  // Get latest warehouse snapshots for each product (filtered by team)
   const { data: warehouseSnapshots } = await supabase
     .from('warehouse_snapshots')
     .select(`
@@ -80,7 +85,7 @@ export default async function HomePage() {
         user_id
       )
     `)
-    .in('products.user_id', accessibleUserIds)
+    .eq('products.team_id', currentTeamId)
     .order('snapshot_date', { ascending: false })
 
   return (

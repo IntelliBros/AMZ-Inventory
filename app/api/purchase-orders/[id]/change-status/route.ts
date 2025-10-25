@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, hasWritePermission } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId, hasTeamWritePermission } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
@@ -23,6 +23,17 @@ export async function POST(
       )
     }
 
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
     const { old_status, new_status } = body
 
@@ -32,13 +43,12 @@ export async function POST(
 
     const supabase = createServerClient()
 
-    // Verify PO and check permissions
-    // @ts-ignore
+    // Verify PO belongs to current team and check permissions
     const { data: po, error: poError } = await supabase
       .from('purchase_orders')
-      .select('po_number, user_id')
+      .select('po_number, team_id')
       .eq('id', poId)
-      .single()
+      .single<{ po_number: string; team_id: string }>()
 
     if (poError || !po) {
       return NextResponse.json(
@@ -47,9 +57,15 @@ export async function POST(
       )
     }
 
+    if (po.team_id !== currentTeamId) {
+      return NextResponse.json(
+        { error: 'Purchase order not found' },
+        { status: 404 }
+      )
+    }
+
     // Check write permission
-    // @ts-ignore
-    const canWrite = await hasWritePermission(currentUser.id, po.user_id)
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
     if (!canWrite) {
       return NextResponse.json(
         { error: 'You do not have permission to change purchase order status' },

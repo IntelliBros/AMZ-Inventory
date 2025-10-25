@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
 import InventoryHistoryList from '@/components/InventoryHistoryList'
@@ -16,8 +16,13 @@ export default async function InventoryHistoryPage() {
     throw new Error('Not authenticated')
   }
 
-  // Get accessible user IDs (own ID + team member access)
-  const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
+  // Get current team ID from cookie or default to user's first team
+  const team = cookieStore.get('team')?.value
+  const currentTeamId = await getCurrentTeamId(team, currentUser.id)
+
+  if (!currentTeamId) {
+    throw new Error('No team access')
+  }
 
   const { data: inventory, error } = await supabase
     .from('inventory_locations')
@@ -29,10 +34,10 @@ export default async function InventoryHistoryPage() {
         name,
         current_cost,
         current_shipping_cost,
-        user_id
+        team_id
       )
     `)
-    .in('products.user_id', accessibleUserIds)
+    .eq('products.team_id', currentTeamId)
     .order('created_at', { ascending: false })
 
   return (

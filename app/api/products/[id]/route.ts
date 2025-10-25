@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, hasWritePermission } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId, hasTeamWritePermission } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
@@ -23,6 +23,17 @@ export async function PATCH(
       )
     }
 
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
     const {
       sku,
@@ -41,13 +52,12 @@ export async function PATCH(
 
     const supabase = createServerClient()
 
-    // Check permissions first
-    // @ts-ignore
+    // Check that product belongs to current team
     const { data: product, error: productError } = await supabase
       .from('products')
-      .select('user_id')
+      .select('team_id')
       .eq('id', id)
-      .single()
+      .single<{ team_id: string }>()
 
     if (productError || !product) {
       return NextResponse.json(
@@ -56,8 +66,15 @@ export async function PATCH(
       )
     }
 
-    // @ts-ignore
-    const canWrite = await hasWritePermission(currentUser.id, product.user_id)
+    if (product.team_id !== currentTeamId) {
+      return NextResponse.json(
+        { error: 'Product not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check write permissions
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
     if (!canWrite) {
       return NextResponse.json(
         { error: 'You do not have permission to update products' },
@@ -128,14 +145,53 @@ export async function DELETE(
       )
     }
 
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const supabase = createServerClient()
 
-    // @ts-ignore - Supabase types don't recognize products table
+    // Check that product belongs to current team
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('team_id')
+      .eq('id', id)
+      .single<{ team_id: string }>()
+
+    if (productError || !product) {
+      return NextResponse.json(
+        { error: 'Product not found' },
+        { status: 404 }
+      )
+    }
+
+    if (product.team_id !== currentTeamId) {
+      return NextResponse.json(
+        { error: 'Product not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check write permissions
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
+    if (!canWrite) {
+      return NextResponse.json(
+        { error: 'You do not have permission to delete products' },
+        { status: 403 }
+      )
+    }
+
     const { error } = await supabase
       .from('products')
       .delete()
       .eq('id', id)
-      .eq('user_id', currentUser.id)
 
     if (error) {
       throw error

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, hasWritePermission } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId, hasTeamWritePermission } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
@@ -11,6 +11,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const cookieStore = await cookies()
     const token = cookieStore.get('auth-token')?.value
     const currentUser = await getCurrentUser(token)
@@ -22,7 +23,17 @@ export async function PATCH(
       )
     }
 
-    const { id } = await params
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
     const { name, contact_person, email, phone, address, notes } = body
 
@@ -35,13 +46,12 @@ export async function PATCH(
 
     const supabase = createServerClient()
 
-    // Check permissions first
-    // @ts-ignore
+    // Check that supplier belongs to current team
     const { data: supplier, error: supplierError } = await supabase
       .from('suppliers')
-      .select('user_id')
+      .select('team_id')
       .eq('id', id)
-      .single()
+      .single<{ team_id: string }>()
 
     if (supplierError || !supplier) {
       return NextResponse.json(
@@ -50,8 +60,15 @@ export async function PATCH(
       )
     }
 
-    // @ts-ignore
-    const canWrite = await hasWritePermission(currentUser.id, supplier.user_id)
+    if (supplier.team_id !== currentTeamId) {
+      return NextResponse.json(
+        { error: 'Supplier not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check write permissions
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
     if (!canWrite) {
       return NextResponse.json(
         { error: 'You do not have permission to update suppliers' },
@@ -102,6 +119,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const cookieStore = await cookies()
     const token = cookieStore.get('auth-token')?.value
     const currentUser = await getCurrentUser(token)
@@ -113,16 +131,25 @@ export async function DELETE(
       )
     }
 
-    const { id } = await params
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const supabase = createServerClient()
 
-    // Check permissions first
-    // @ts-ignore
+    // Check that supplier belongs to current team
     const { data: supplier, error: supplierError } = await supabase
       .from('suppliers')
-      .select('user_id')
+      .select('team_id')
       .eq('id', id)
-      .single()
+      .single<{ team_id: string }>()
 
     if (supplierError || !supplier) {
       return NextResponse.json(
@@ -131,8 +158,15 @@ export async function DELETE(
       )
     }
 
-    // @ts-ignore
-    const canWrite = await hasWritePermission(currentUser.id, supplier.user_id)
+    if (supplier.team_id !== currentTeamId) {
+      return NextResponse.json(
+        { error: 'Supplier not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check write permissions
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
     if (!canWrite) {
       return NextResponse.json(
         { error: 'You do not have permission to delete suppliers' },

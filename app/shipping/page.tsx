@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
 import ShippingInvoiceList from '@/components/ShippingInvoiceList'
@@ -17,8 +17,13 @@ export default async function ShippingPage() {
     throw new Error('Not authenticated')
   }
 
-  // Get accessible user IDs (own ID + team member access)
-  const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
+  // Get current team ID from cookie or default to user's first team
+  const team = cookieStore.get('team')?.value
+  const currentTeamId = await getCurrentTeamId(team, currentUser.id)
+
+  if (!currentTeamId) {
+    throw new Error('No team access')
+  }
 
   const { data: shippingInvoices, error } = await supabase
     .from('shipping_invoices')
@@ -33,13 +38,13 @@ export default async function ShippingPage() {
         )
       )
     `)
-    .in('user_id', accessibleUserIds)
+    .eq('team_id', currentTeamId)
     .order('created_at', { ascending: false })
 
   const { data: products } = await supabase
     .from('products')
     .select('id, sku, name, current_shipping_cost, carton_length_cm, carton_width_cm, carton_height_cm, carton_weight_kg, units_per_carton')
-    .in('user_id', accessibleUserIds)
+    .eq('team_id', currentTeamId)
     .order('name')
 
   return (

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, isViewer } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId, hasTeamWritePermission } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
@@ -19,11 +19,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user is a viewer - viewers cannot create any resources
-    const userIsViewer = await isViewer(currentUser.id)
-    if (userIsViewer) {
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
       return NextResponse.json(
-        { error: 'You do not have permission to create purchase orders. Viewers have read-only access.' },
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
+    // Check write permissions
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
+    if (!canWrite) {
+      return NextResponse.json(
+        { error: 'You do not have permission to create purchase orders' },
         { status: 403 }
       )
     }
@@ -56,7 +67,7 @@ export async function POST(request: NextRequest) {
       status: status || 'in_production',
       total_product_cost: total_product_cost || 0,
       notes: notes || null,
-      user_id: currentUser.id,
+      team_id: currentTeamId,
     }
 
     // @ts-ignore - Supabase types don't recognize purchase_orders table

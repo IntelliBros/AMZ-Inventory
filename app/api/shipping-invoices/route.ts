@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, hasWritePermission, isViewer } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId, hasTeamWritePermission } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
@@ -19,11 +19,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user is a viewer - viewers cannot create any resources
-    const userIsViewer = await isViewer(currentUser.id)
-    if (userIsViewer) {
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
       return NextResponse.json(
-        { error: 'You do not have permission to create shipping invoices. Viewers have read-only access.' },
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
+    // Check write permissions
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
+    if (!canWrite) {
+      return NextResponse.json(
+        { error: 'You do not have permission to create shipping invoices' },
         { status: 403 }
       )
     }
@@ -39,29 +50,6 @@ export async function POST(request: NextRequest) {
       notes,
       line_items,
     } = body
-
-    // Check write permissions - verify current user can create shipping invoices
-    // by checking the first product's owner
-    if (line_items && line_items.length > 0) {
-      const supabase = createServerClient()
-      // @ts-ignore
-      const { data: product } = await supabase
-        .from('products')
-        .select('user_id')
-        .eq('id', line_items[0].product_id)
-        .single()
-
-      if (product) {
-        // @ts-ignore
-        const canWrite = await hasWritePermission(currentUser.id, product.user_id)
-        if (!canWrite) {
-          return NextResponse.json(
-            { error: 'You do not have permission to create shipping invoices' },
-            { status: 403 }
-          )
-        }
-      }
-    }
 
     if (!invoice_number || !shipping_date || !carrier || !total_shipping_cost) {
       return NextResponse.json(
@@ -80,7 +68,7 @@ export async function POST(request: NextRequest) {
       status: status || 'pending',
       total_shipping_cost,
       notes: notes || null,
-      user_id: currentUser.id,
+      team_id: currentTeamId,
     }
 
     // @ts-ignore - Supabase types don't recognize shipping_invoices table

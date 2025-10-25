@@ -85,12 +85,14 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient()
 
     // Create the team
-    const { data: team, error: teamError } = await supabase
+    const teamData = {
+      name: name.trim(),
+      owner_id: currentUser.id,
+    }
+
+    const { data: team, error: teamError } = await (supabase as any)
       .from('teams')
-      .insert({
-        name: name.trim(),
-        owner_id: currentUser.id,
-      })
+      .insert(teamData)
       .select()
       .single()
 
@@ -99,13 +101,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Add the user as owner in team_users
-    const { error: memberError } = await supabase
+    const memberData = {
+      team_id: team.id,
+      user_id: currentUser.id,
+      role: 'owner' as const,
+    }
+
+    const { error: memberError } = await (supabase as any)
       .from('team_users')
-      .insert({
-        team_id: team.id,
-        user_id: currentUser.id,
-        role: 'owner',
-      })
+      .insert(memberData)
 
     if (memberError) {
       // Rollback: delete the team if adding member fails

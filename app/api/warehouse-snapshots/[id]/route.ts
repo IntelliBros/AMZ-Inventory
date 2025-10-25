@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, hasWritePermission } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId, hasTeamWritePermission } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
@@ -23,18 +23,28 @@ export async function PATCH(
       )
     }
 
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
     const { product_id, snapshot_date, quantity, notes } = body
 
     const supabase = createServerClient()
 
-    // Verify the snapshot belongs to the current user and check permissions
-    // @ts-ignore
+    // Check that snapshot belongs to current team
     const { data: snapshot, error: snapshotError } = await supabase
       .from('warehouse_snapshots')
-      .select('user_id')
+      .select('team_id')
       .eq('id', id)
-      .single()
+      .single<{ team_id: string }>()
 
     if (snapshotError || !snapshot) {
       return NextResponse.json(
@@ -43,41 +53,42 @@ export async function PATCH(
       )
     }
 
-    // Check write permission
-    // @ts-ignore
-    const canWrite = await hasWritePermission(currentUser.id, snapshot.user_id)
+    if (snapshot.team_id !== currentTeamId) {
+      return NextResponse.json(
+        { error: 'Warehouse snapshot not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check write permissions
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
     if (!canWrite) {
       return NextResponse.json(
-        { error: 'You do not have permission to edit warehouse snapshots' },
+        { error: 'You do not have permission to update warehouse snapshots' },
         { status: 403 }
       )
     }
 
-    const snapshotData = {
-      product_id,
-      snapshot_date,
-      quantity,
-      notes: notes || null,
-    }
-
     // Update snapshot
-    // @ts-ignore
-    const { data, error } = await supabase
+    const { data, error } = (await (supabase as any)
       .from('warehouse_snapshots')
-      // @ts-ignore
-      .update(snapshotData)
+      .update({
+        product_id,
+        snapshot_date,
+        quantity,
+        notes: notes || null,
+      })
       .eq('id', id)
       .select()
-      .single()
+      .single()) as { data: any; error: any }
 
     if (error) throw error
 
     // Recalculate sales for this snapshot (period ending with this snapshot)
-    await calculateAndSaveSales(supabase, id, product_id, snapshot_date, quantity, currentUser.id)
+    await calculateAndSaveSales(supabase, id, product_id, snapshot_date, quantity, currentUser.id, currentTeamId)
 
     // Also recalculate sales for the NEXT snapshot (if it exists)
     // because changing this snapshot affects the next period's calculation
-    // @ts-ignore
     const { data: nextSnapshot } = await supabase
       .from('warehouse_snapshots')
       .select('*')
@@ -85,20 +96,22 @@ export async function PATCH(
       .gt('snapshot_date', snapshot_date)
       .order('snapshot_date', { ascending: true })
       .limit(1)
-      .single()
+      .single<{
+        id: string
+        product_id: string
+        snapshot_date: string
+        quantity: number
+      }>()
 
     if (nextSnapshot) {
       await calculateAndSaveSales(
         supabase,
-        // @ts-ignore
         nextSnapshot.id,
-        // @ts-ignore
         nextSnapshot.product_id,
-        // @ts-ignore
         nextSnapshot.snapshot_date,
-        // @ts-ignore
         nextSnapshot.quantity,
-        currentUser.id
+        currentUser.id,
+        currentTeamId
       )
     }
 
@@ -130,15 +143,25 @@ export async function DELETE(
       )
     }
 
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const supabase = createServerClient()
 
-    // Get snapshot details before deleting (need product_id and date for recalculation)
-    // @ts-ignore
+    // Check that snapshot belongs to current team
     const { data: snapshot, error: snapshotError } = await supabase
       .from('warehouse_snapshots')
-      .select('user_id, product_id, snapshot_date')
+      .select('team_id, product_id, snapshot_date')
       .eq('id', id)
-      .single()
+      .single<{ team_id: string; product_id: string; snapshot_date: string }>()
 
     if (snapshotError || !snapshot) {
       return NextResponse.json(
@@ -147,9 +170,15 @@ export async function DELETE(
       )
     }
 
-    // Check write permission
-    // @ts-ignore
-    const canWrite = await hasWritePermission(currentUser.id, snapshot.user_id)
+    if (snapshot.team_id !== currentTeamId) {
+      return NextResponse.json(
+        { error: 'Warehouse snapshot not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check write permissions
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
     if (!canWrite) {
       return NextResponse.json(
         { error: 'You do not have permission to delete warehouse snapshots' },
@@ -157,9 +186,7 @@ export async function DELETE(
       )
     }
 
-    // @ts-ignore
     const productId = snapshot.product_id
-    // @ts-ignore
     const snapshotDate = snapshot.snapshot_date
 
     // Delete any sales records associated with this snapshot
@@ -171,7 +198,6 @@ export async function DELETE(
       .eq('end_date', snapshotDate)
 
     // Delete the snapshot
-    // @ts-ignore
     const { error } = await supabase
       .from('warehouse_snapshots')
       .delete()
@@ -182,7 +208,6 @@ export async function DELETE(
     // Recalculate sales for the NEXT snapshot (if it exists)
     // because deleting this snapshot means the next snapshot's calculation
     // will now use the previous snapshot as its starting point
-    // @ts-ignore
     const { data: nextSnapshot } = await supabase
       .from('warehouse_snapshots')
       .select('*')
@@ -190,20 +215,22 @@ export async function DELETE(
       .gt('snapshot_date', snapshotDate)
       .order('snapshot_date', { ascending: true })
       .limit(1)
-      .single()
+      .single<{
+        id: string
+        product_id: string
+        snapshot_date: string
+        quantity: number
+      }>()
 
     if (nextSnapshot) {
       await calculateAndSaveSales(
         supabase,
-        // @ts-ignore
         nextSnapshot.id,
-        // @ts-ignore
         nextSnapshot.product_id,
-        // @ts-ignore
         nextSnapshot.snapshot_date,
-        // @ts-ignore
         nextSnapshot.quantity,
-        currentUser.id
+        currentUser.id,
+        currentTeamId
       )
     }
 
@@ -223,10 +250,10 @@ async function calculateAndSaveSales(
   productId: string,
   currentDate: string,
   currentQuantity: number,
-  userId: string
+  userId: string,
+  teamId: string
 ) {
   // Get previous snapshot for this product
-  // @ts-ignore
   const { data: previousSnapshot } = await supabase
     .from('warehouse_snapshots')
     .select('*')
@@ -240,7 +267,6 @@ async function calculateAndSaveSales(
     return
   }
 
-  // @ts-ignore
   const { data: deliveredShipments } = await supabase
     .from('shipping_line_items')
     .select(`
@@ -252,13 +278,11 @@ async function calculateAndSaveSales(
     `)
     .eq('product_id', productId)
     .eq('shipping_invoices.status', 'delivered')
-    // @ts-ignore
     .gte('shipping_invoices.shipping_date', previousSnapshot.snapshot_date)
     .lte('shipping_invoices.shipping_date', currentDate)
-  // @ts-ignore
-  const unitsDeliveredInPeriod = deliveredShipments?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-  // @ts-ignore
+  const unitsDeliveredInPeriod = deliveredShipments?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0
+
   const unitsSold = (previousSnapshot.quantity + unitsDeliveredInPeriod) - currentQuantity
 
   if (unitsSold >= 0) {
@@ -266,35 +290,30 @@ async function calculateAndSaveSales(
       .from('sales_records')
       .select('id')
       .eq('product_id', productId)
-      // @ts-ignore
       .eq('start_date', previousSnapshot.snapshot_date)
       .eq('end_date', currentDate)
       .single()
 
     const salesData = {
       product_id: productId,
-      // @ts-ignore
       start_date: previousSnapshot.snapshot_date,
       end_date: currentDate,
       units_sold: unitsSold,
-      // @ts-ignore
       starting_inventory: previousSnapshot.quantity,
       ending_inventory: currentQuantity,
       units_received: unitsDeliveredInPeriod,
       user_id: userId,
+      team_id: teamId,
     }
 
     if (existingSalesRecord) {
       await supabase
         .from('sales_records')
-        // @ts-ignore
         .update(salesData)
-        // @ts-ignore
         .eq('id', existingSalesRecord.id)
     } else {
       await supabase
         .from('sales_records')
-        // @ts-ignore
         .insert([salesData])
     }
   }

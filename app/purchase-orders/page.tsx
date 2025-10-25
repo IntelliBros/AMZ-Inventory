@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
 import PurchaseOrderList from '@/components/PurchaseOrderList'
@@ -17,8 +17,13 @@ export default async function PurchaseOrdersPage() {
     throw new Error('Not authenticated')
   }
 
-  // Get accessible user IDs (own ID + team member access)
-  const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
+  // Get team from cookie and get current team ID
+  const teamCookie = cookieStore.get('team')?.value
+  const currentTeamId = await getCurrentTeamId(teamCookie, currentUser.id)
+
+  if (!currentTeamId) {
+    throw new Error('No team found')
+  }
 
   const { data: purchaseOrders, error } = await supabase
     .from('purchase_orders')
@@ -33,19 +38,19 @@ export default async function PurchaseOrdersPage() {
         )
       )
     `)
-    .in('user_id', accessibleUserIds)
+    .eq('team_id', currentTeamId)
     .order('created_at', { ascending: false })
 
   const { data: products } = await supabase
     .from('products')
     .select('id, sku, name, current_cost')
-    .in('user_id', accessibleUserIds)
+    .eq('team_id', currentTeamId)
     .order('name')
 
   const { data: suppliers } = await supabase
     .from('suppliers')
     .select('id, name')
-    .in('user_id', accessibleUserIds)
+    .eq('team_id', currentTeamId)
     .order('name')
 
   return (

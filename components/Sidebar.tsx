@@ -59,13 +59,13 @@ export default function Sidebar() {
 
   const fetchTeamName = async () => {
     try {
-      const response = await fetch('/api/team/settings', {
+      const response = await fetch('/api/teams/current', {
         credentials: 'include'
       })
 
       if (response.ok) {
-        const { team_name } = await response.json()
-        const finalName = team_name || 'Amazon FBA'
+        const { team } = await response.json()
+        const finalName = team?.name || 'Amazon FBA'
         setTeamName(finalName)
         cacheTeamName(finalName)
       }

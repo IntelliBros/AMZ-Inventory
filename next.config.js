@@ -6,7 +6,6 @@ const nextConfig = {
     },
   },
   // Enable optimizations
-  swcMinify: true,
   compress: true,
   poweredByHeader: false,
   // Optimize images

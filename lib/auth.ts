@@ -236,7 +236,7 @@ export async function getCurrentTeamId(cookieTeamId: string | undefined, userId:
     .eq('user_id', userId)
     .order('created_at', { ascending: true })
     .limit(1)
-    .single()
+    .single<{ team_id: string }>()
 
   return teamUser?.team_id || null
 }
@@ -250,7 +250,7 @@ export async function hasTeamWritePermission(userId: string, teamId: string): Pr
     .select('role')
     .eq('team_id', teamId)
     .eq('user_id', userId)
-    .single()
+    .single<{ role: string }>()
 
   if (!teamUser) return false
 

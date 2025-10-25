@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
@@ -19,19 +19,29 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const locationType = searchParams.get('location_type')
     const productId = searchParams.get('product_id')
 
     const supabase = createServerClient()
-    const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
 
-    // Get all products that belong to accessible users
+    // Get all products that belong to current team
     // @ts-ignore
     const { data: accessibleProducts } = await supabase
       .from('products')
       .select('id')
-      .in('user_id', accessibleUserIds)
+      .eq('team_id', currentTeamId)
 
     const productIds = accessibleProducts?.map((p: any) => p.id) || []
 
@@ -82,6 +92,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
     const { locations } = body
 
@@ -93,6 +114,36 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient()
+
+    // Verify all product_ids belong to current team
+    const productIds = [...new Set(locations.map((loc: any) => loc.product_id))]
+    const { data: products, error: productError } = await supabase
+      .from('products')
+      .select('id, team_id')
+      .in('id', productIds)
+
+    if (productError) {
+      throw productError
+    }
+
+    // Check if all products belong to current team
+    const invalidProducts = products?.filter((p: any) => p.team_id !== currentTeamId)
+    if (invalidProducts && invalidProducts.length > 0) {
+      return NextResponse.json(
+        { error: 'One or more products do not belong to your team' },
+        { status: 403 }
+      )
+    }
+
+    // Check write permissions
+    const { hasTeamWritePermission } = await import('@/lib/auth')
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
+    if (!canWrite) {
+      return NextResponse.json(
+        { error: 'You do not have permission to create inventory locations' },
+        { status: 403 }
+      )
+    }
 
     // @ts-ignore - Supabase types don't recognize inventory_locations table
     const { data, error } = await supabase

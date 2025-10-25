@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser, getAccessibleUserIds } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
 import SalesTrackingView from '@/components/SalesTrackingView'
@@ -16,10 +16,15 @@ export default async function SalesPage() {
     throw new Error('Not authenticated')
   }
 
-  // Get accessible user IDs (own ID + team member access)
-  const accessibleUserIds = await getAccessibleUserIds(currentUser.id)
+  // Get current team ID from cookie or default to user's first team
+  const team = cookieStore.get('team')?.value
+  const currentTeamId = await getCurrentTeamId(team, currentUser.id)
 
-  // Fetch sales records with product details (filtered by accessible users)
+  if (!currentTeamId) {
+    throw new Error('No team access')
+  }
+
+  // Fetch sales records with product details (filtered by team)
   const { data: salesRecords, error: salesError } = await supabase
     .from('sales_records')
     .select(`
@@ -31,18 +36,18 @@ export default async function SalesPage() {
         current_cost
       )
     `)
-    .in('user_id', accessibleUserIds)
+    .eq('team_id', currentTeamId)
     .order('end_date', { ascending: false })
 
   if (salesError) {
     console.error('Error fetching sales records:', salesError)
   }
 
-  // Fetch products for filtering (filtered by accessible users)
+  // Fetch products for filtering (filtered by team)
   const { data: products, error: productsError } = await supabase
     .from('products')
     .select('id, sku, name')
-    .in('user_id', accessibleUserIds)
+    .eq('team_id', currentTeamId)
     .order('name')
 
   if (productsError) {

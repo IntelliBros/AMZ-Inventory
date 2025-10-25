@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, hasWritePermission } from '@/lib/auth'
+import { getCurrentUser, getCurrentTeamId, hasTeamWritePermission } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
@@ -23,18 +23,29 @@ export async function PATCH(
       )
     }
 
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
     const { status } = body
 
     const supabase = createServerClient()
 
-    // Verify the invoice and check permissions
+    // Check that invoice belongs to current team
     // @ts-ignore
     const { data: invoice, error: invoiceError } = await supabase
       .from('shipping_invoices')
-      .select('user_id, invoice_number, status')
+      .select('team_id, invoice_number, status')
       .eq('id', id)
-      .single()
+      .single<{ team_id: string; invoice_number: string; status: string }>()
 
     if (invoiceError || !invoice) {
       return NextResponse.json(
@@ -43,9 +54,15 @@ export async function PATCH(
       )
     }
 
-    // Check write permission
-    // @ts-ignore
-    const canWrite = await hasWritePermission(currentUser.id, invoice.user_id)
+    if (invoice.team_id !== currentTeamId) {
+      return NextResponse.json(
+        { error: 'Shipping invoice not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check write permissions
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
     if (!canWrite) {
       return NextResponse.json(
         { error: 'You do not have permission to update shipping invoices' },
@@ -165,15 +182,26 @@ export async function DELETE(
       )
     }
 
+    // Get current team
+    const cookieTeamId = cookieStore.get('current-team-id')?.value
+    const currentTeamId = await getCurrentTeamId(cookieTeamId, currentUser.id)
+
+    if (!currentTeamId) {
+      return NextResponse.json(
+        { error: 'No team selected' },
+        { status: 400 }
+      )
+    }
+
     const supabase = createServerClient()
 
-    // Verify the invoice and check permissions
+    // Check that invoice belongs to current team
     // @ts-ignore
     const { data: invoice, error: invoiceError } = await supabase
       .from('shipping_invoices')
-      .select('user_id')
+      .select('team_id')
       .eq('id', id)
-      .single()
+      .single<{ team_id: string }>()
 
     if (invoiceError || !invoice) {
       return NextResponse.json(
@@ -182,9 +210,15 @@ export async function DELETE(
       )
     }
 
-    // Check write permission
-    // @ts-ignore
-    const canWrite = await hasWritePermission(currentUser.id, invoice.user_id)
+    if (invoice.team_id !== currentTeamId) {
+      return NextResponse.json(
+        { error: 'Shipping invoice not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check write permissions
+    const canWrite = await hasTeamWritePermission(currentUser.id, currentTeamId)
     if (!canWrite) {
       return NextResponse.json(
         { error: 'You do not have permission to delete shipping invoices' },

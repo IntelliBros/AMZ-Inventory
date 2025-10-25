@@ -53,6 +53,8 @@ export async function createUser(email: string, password: string): Promise<{ id:
   const supabase = createServerClient()
   const passwordHash = await hashPassword(password)
 
+  console.log('Attempting to insert user into database:', email)
+
   const { data, error } = await supabase
     .from('users')
     // @ts-expect-error - Supabase types don't recognize users table
@@ -60,7 +62,28 @@ export async function createUser(email: string, password: string): Promise<{ id:
     .select('id, email')
     .single()
 
-  if (error) throw error
+  if (error) {
+    console.error('Database insert error:', error)
+    throw error
+  }
+
+  console.log('User inserted successfully, returned data:', data)
+
+  // Verify the user actually exists by querying it back
+  const { data: verifyData, error: verifyError } = await supabase
+    .from('users')
+    .select('id, email')
+    // @ts-expect-error - Supabase types don't recognize users table
+    .eq('id', data.id)
+    .single()
+
+  if (verifyError || !verifyData) {
+    console.error('CRITICAL: User was inserted but cannot be found!', { verifyError, userId: data.id })
+    throw new Error('User creation verification failed - user not found after insert')
+  }
+
+  console.log('User verified in database:', verifyData)
+
   return data as { id: string; email: string }
 }
 

@@ -8,6 +8,11 @@ interface Product {
   sku: string
   name: string
   current_shipping_cost: number
+  carton_length_cm: number | null
+  carton_width_cm: number | null
+  carton_height_cm: number | null
+  carton_weight_kg: number | null
+  units_per_carton: number | null
 }
 
 interface AddShippingInvoiceButtonProps {

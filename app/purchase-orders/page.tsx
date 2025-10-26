@@ -28,7 +28,19 @@ export default async function PurchaseOrdersPage() {
   const { data: purchaseOrders, error } = await supabase
     .from('purchase_orders')
     .select(`
-      *,
+      id,
+      created_at,
+      updated_at,
+      user_id,
+      team_id,
+      po_number,
+      supplier,
+      order_date,
+      expected_delivery_date,
+      status,
+      total_product_cost,
+      notes,
+      document_url,
       po_line_items (
         *,
         products (

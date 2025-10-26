@@ -28,7 +28,19 @@ export default async function ShippingPage() {
   const { data: shippingInvoices, error } = await supabase
     .from('shipping_invoices')
     .select(`
-      *,
+      id,
+      created_at,
+      updated_at,
+      user_id,
+      team_id,
+      invoice_number,
+      shipping_date,
+      carrier,
+      tracking_number,
+      status,
+      total_shipping_cost,
+      notes,
+      document_url,
       shipping_line_items (
         *,
         products (

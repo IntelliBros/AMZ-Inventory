@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
       status: status || 'pending',
       total_shipping_cost,
       notes: notes || null,
+      user_id: currentUser.id,
       team_id: currentTeamId,
     }
 

@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
       status: status || 'in_production',
       total_product_cost: total_product_cost || 0,
       notes: notes || null,
+      user_id: currentUser.id,
       team_id: currentTeamId,
     }
 

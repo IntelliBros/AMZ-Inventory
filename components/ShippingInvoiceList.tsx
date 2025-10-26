@@ -177,7 +177,7 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
                         </p>
                       </div>
 
-                      {/* Upload/View Document Button */}
+                      {/* Upload/View Invoice Button */}
                       {invoice.document_url ? (
                         <a
                           href={invoice.document_url}
@@ -185,9 +185,9 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
                           className="px-3 py-1.5 border border-[#FF9900] text-[#FF9900] text-xs font-medium rounded-md hover:bg-[#FF9900] hover:text-white transition-colors whitespace-nowrap"
-                          title="View uploaded document"
+                          title="View uploaded invoice"
                         >
-                          View Doc
+                          View Invoice
                         </a>
                       ) : (
                         <label
@@ -202,7 +202,7 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
                             onChange={(e) => handleFileUpload(invoice, e)}
                             disabled={uploadingId === invoice.id}
                           />
-                          {uploadingId === invoice.id ? 'Uploading...' : 'Upload Doc'}
+                          {uploadingId === invoice.id ? 'Uploading...' : 'Upload Invoice'}
                         </label>
                       )}
 

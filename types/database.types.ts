@@ -210,6 +210,7 @@ export interface Database {
           status: 'in_production' | 'in_storage' | 'partially_shipped' | 'fully_shipped' | 'cancelled' | 'complete'
           total_product_cost: number
           notes: string | null
+          document_url: string | null
         }
         Insert: {
           id?: string
@@ -224,6 +225,7 @@ export interface Database {
           status?: 'in_production' | 'in_storage' | 'partially_shipped' | 'fully_shipped' | 'cancelled' | 'complete'
           total_product_cost: number
           notes?: string | null
+          document_url?: string | null
         }
         Update: {
           id?: string
@@ -238,6 +240,7 @@ export interface Database {
           status?: 'in_production' | 'in_storage' | 'partially_shipped' | 'fully_shipped' | 'cancelled' | 'complete'
           total_product_cost?: number
           notes?: string | null
+          document_url?: string | null
         }
       }
       po_line_items: {
@@ -286,6 +289,7 @@ export interface Database {
           status: 'pending' | 'in_transit' | 'delivered'
           total_shipping_cost: number
           notes: string | null
+          document_url: string | null
         }
         Insert: {
           id?: string
@@ -300,6 +304,7 @@ export interface Database {
           status?: 'pending' | 'in_transit' | 'delivered'
           total_shipping_cost: number
           notes?: string | null
+          document_url?: string | null
         }
         Update: {
           id?: string
@@ -314,6 +319,7 @@ export interface Database {
           status?: 'pending' | 'in_transit' | 'delivered'
           total_shipping_cost?: number
           notes?: string | null
+          document_url?: string | null
         }
       }
       shipment_pos: {

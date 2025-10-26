@@ -62,6 +62,7 @@ const statusLabels = {
 export default function PurchaseOrderList({ purchaseOrders, products, suppliers }: PurchaseOrderListProps) {
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
 
   const handleEdit = (po: PurchaseOrder) => {
     setSelectedPO(po)
@@ -76,6 +77,37 @@ export default function PurchaseOrderList({ purchaseOrders, products, suppliers 
   const handleDownloadPDF = (po: PurchaseOrder, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent opening the edit modal
     generatePurchaseOrderPDF(po)
+  }
+
+  const handleFileUpload = async (po: PurchaseOrder, e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation()
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      setUploadingId(po.id)
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch(`/api/purchase-orders/${po.id}/upload-document`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to upload document')
+      }
+
+      // Refresh the page to show the updated document
+      window.location.reload()
+    } catch (error: any) {
+      console.error('Error uploading document:', error)
+      alert(error.message || 'Failed to upload document')
+    } finally {
+      setUploadingId(null)
+    }
   }
 
   if (purchaseOrders.length === 0) {
@@ -169,6 +201,53 @@ export default function PurchaseOrderList({ purchaseOrders, products, suppliers 
                       </svg>
                       Download PDF
                     </button>
+
+                    {/* Upload/View Document Button */}
+                    {po.document_url ? (
+                      <a
+                        href={po.document_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center px-4 py-2 border border-[#FF9900] shadow-sm text-sm font-medium rounded text-[#FF9900] bg-white hover:bg-[#FF9900] hover:text-white transition-colors w-full justify-center"
+                        title="View uploaded document"
+                      >
+                        <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        View Document
+                      </a>
+                    ) : (
+                      <label
+                        className="inline-flex items-center px-4 py-2 border border-[#D5D9D9] shadow-sm text-sm font-medium rounded text-[#0F1111] bg-white hover:bg-gray-50 transition-colors w-full justify-center cursor-pointer"
+                        title="Upload invoice document"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                          onChange={(e) => handleFileUpload(po, e)}
+                          disabled={uploadingId === po.id}
+                        />
+                        {uploadingId === po.id ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            Upload Document
+                          </>
+                        )}
+                      </label>
+                    )}
                   </div>
                 </div>
               </div>

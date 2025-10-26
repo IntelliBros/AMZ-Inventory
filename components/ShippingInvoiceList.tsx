@@ -42,6 +42,7 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
   const [selectedInvoice, setSelectedInvoice] = useState<ShippingInvoice | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [updating, setUpdating] = useState<string | null>(null)
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
   const router = useRouter()
 
   const handleEdit = (invoice: ShippingInvoice) => {
@@ -52,6 +53,37 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
   const handleClose = () => {
     setSelectedInvoice(null)
     setIsModalOpen(false)
+  }
+
+  const handleFileUpload = async (invoice: ShippingInvoice, e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation()
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      setUploadingId(invoice.id)
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch(`/api/shipping-invoices/${invoice.id}/upload-document`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to upload document')
+      }
+
+      // Refresh the page to show the updated document
+      window.location.reload()
+    } catch (error: any) {
+      console.error('Error uploading document:', error)
+      alert(error.message || 'Failed to upload document')
+    } finally {
+      setUploadingId(null)
+    }
   }
 
   const handleMarkAsDelivered = async (invoice: ShippingInvoice, e: React.MouseEvent) => {
@@ -144,6 +176,36 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
                           {totalUnits} units ({invoice.shipping_line_items.length} {invoice.shipping_line_items.length === 1 ? 'product' : 'products'})
                         </p>
                       </div>
+
+                      {/* Upload/View Document Button */}
+                      {invoice.document_url ? (
+                        <a
+                          href={invoice.document_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-3 py-1.5 border border-[#FF9900] text-[#FF9900] text-xs font-medium rounded-md hover:bg-[#FF9900] hover:text-white transition-colors whitespace-nowrap"
+                          title="View uploaded document"
+                        >
+                          View Doc
+                        </a>
+                      ) : (
+                        <label
+                          className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs font-medium rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap cursor-pointer"
+                          title="Upload invoice document"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            onChange={(e) => handleFileUpload(invoice, e)}
+                            disabled={uploadingId === invoice.id}
+                          />
+                          {uploadingId === invoice.id ? 'Uploading...' : 'Upload Doc'}
+                        </label>
+                      )}
+
                       {invoice.status !== 'delivered' && (
                         <button
                           onClick={(e) => handleMarkAsDelivered(invoice, e)}

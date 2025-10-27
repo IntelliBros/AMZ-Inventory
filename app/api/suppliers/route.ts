@@ -59,17 +59,17 @@ export async function POST(request: NextRequest) {
       address: address || null,
       notes: notes || null,
       team_id: currentTeamId,
+      user_id: currentUser.id,
     }
 
-    // @ts-ignore - Supabase types don't recognize suppliers table
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('suppliers')
-      // @ts-ignore - Supabase types don't recognize suppliers table
-      .insert([supplierData])
+      .insert(supplierData)
       .select()
       .single()
 
     if (error) {
+      console.error('Supabase error creating supplier:', error)
       throw error
     }
 

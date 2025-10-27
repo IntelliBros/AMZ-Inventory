@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate:users": "tsx scripts/migrate-users.ts"
   },
   "keywords": [],
   "author": "",
@@ -36,6 +37,8 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/cookie": "^0.6.0"
+    "@types/cookie": "^0.6.0",
+    "dotenv": "^17.2.3",
+    "tsx": "^4.20.6"
   }
 }

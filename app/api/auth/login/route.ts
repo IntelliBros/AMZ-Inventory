@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserByEmail, verifyPassword, generateToken } from '@/lib/auth'
 import { cookies } from 'next/headers'
+import { createServerClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 
@@ -36,10 +37,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Get user's default team
+    const supabase = createServerClient()
+
+    const { data: teamUser } = await supabase
+      .from('team_users')
+      .select('team_id')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single<{ team_id: string }>()
+
     // Generate JWT token
     const token = await generateToken({ userId: user.id, email: user.email })
 
-    // Set cookie
+    // Set cookies
     const cookieStore = await cookies()
     cookieStore.set('auth-token', token, {
       httpOnly: true,
@@ -48,6 +60,17 @@ export async function POST(request: NextRequest) {
       path: '/',
       maxAge: 60 * 60 * 24 * 7 // 7 days
     })
+
+    // Set current team cookie if user has a team
+    if (teamUser?.team_id) {
+      cookieStore.set('current-team-id', teamUser.team_id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365 // 1 year
+      })
+    }
 
     console.log('Login successful, cookie set for user:', user.email)
 

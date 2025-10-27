@@ -60,6 +60,21 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServerClient()
 
+    // Check if invoice number already exists for this user
+    const { data: existingInvoice } = await (supabase as any)
+      .from('shipping_invoices')
+      .select('id')
+      .eq('user_id', currentUser.id)
+      .eq('invoice_number', invoice_number)
+      .single()
+
+    if (existingInvoice) {
+      return NextResponse.json(
+        { error: `Invoice number "${invoice_number}" already exists. Please use a different invoice number.` },
+        { status: 400 }
+      )
+    }
+
     const invoiceData = {
       invoice_number,
       shipping_date,
@@ -72,20 +87,20 @@ export async function POST(request: NextRequest) {
       team_id: currentTeamId,
     }
 
-    // @ts-ignore - Supabase types don't recognize shipping_invoices table
-    const { data: invoice, error: invoiceError } = await supabase
+    const { data: invoice, error: invoiceError } = await (supabase as any)
       .from('shipping_invoices')
-      // @ts-ignore - Supabase types don't recognize shipping_invoices table
-      .insert([invoiceData])
+      .insert(invoiceData)
       .select()
       .single()
 
-    if (invoiceError) throw invoiceError
+    if (invoiceError) {
+      console.error('Supabase error creating shipping invoice:', invoiceError)
+      throw invoiceError
+    }
 
     // Insert line items and convert inventory from storage to en_route
     if (line_items && line_items.length > 0) {
       const lineItemsData = line_items.map((item: any) => ({
-        // @ts-ignore
         shipping_invoice_id: invoice.id,
         product_id: item.product_id,
         po_line_item_id: null,
@@ -94,17 +109,17 @@ export async function POST(request: NextRequest) {
         total_shipping_cost: item.quantity * item.unit_shipping_cost,
       }))
 
-      // @ts-ignore - Supabase types don't recognize shipping_line_items table
-      const { error: lineItemsError } = await supabase
+      const { error: lineItemsError } = await (supabase as any)
         .from('shipping_line_items')
-        // @ts-ignore - Supabase types don't recognize shipping_line_items table
         .insert(lineItemsData)
 
-      if (lineItemsError) throw lineItemsError
+      if (lineItemsError) {
+        console.error('Error creating shipping line items:', lineItemsError)
+        throw lineItemsError
+      }
 
       // Convert inventory from storage to en_route (FIFO)
       for (const item of line_items) {
-        // @ts-ignore
         const { data: storageInventories } = await supabase
           .from('inventory_locations')
           .select('*')
@@ -115,35 +130,29 @@ export async function POST(request: NextRequest) {
         if (storageInventories && storageInventories.length > 0) {
           let remainingToShip = item.quantity
 
-          // @ts-ignore
           for (const storage of storageInventories) {
             if (remainingToShip <= 0) break
-            // @ts-ignore
-            if (storage.quantity <= remainingToShip) {
+
+            const storageQty = (storage as any).quantity
+            if (storageQty <= remainingToShip) {
               // Fully consume this storage record
-              // @ts-ignore
-              await supabase.from('inventory_locations').delete().eq('id', storage.id)
-              // @ts-ignore
-              remainingToShip -= storage.quantity
+              await supabase.from('inventory_locations').delete().eq('id', (storage as any).id)
+              remainingToShip -= storageQty
             } else {
               // Partially consume
-              await supabase
+              await (supabase as any)
                 .from('inventory_locations')
-                // @ts-ignore
-                .update({ quantity: storage.quantity - remainingToShip })
-                // @ts-ignore
-                .eq('id', storage.id)
+                .update({ quantity: storageQty - remainingToShip })
+                .eq('id', (storage as any).id)
               remainingToShip = 0
             }
           }
 
           // Get the product's unit cost from the first storage record
-          // @ts-ignore
-          const unitCost = storageInventories[0]?.unit_cost || 0
+          const unitCost = (storageInventories[0] as any)?.unit_cost || 0
 
           // Create en_route inventory
-          // @ts-ignore
-          const { error: enRouteError } = await supabase.from('inventory_locations').insert([{
+          const { error: enRouteError } = await (supabase as any).from('inventory_locations').insert({
             product_id: item.product_id,
             location_type: 'en_route',
             quantity: item.quantity,
@@ -151,7 +160,7 @@ export async function POST(request: NextRequest) {
             unit_shipping_cost: item.unit_shipping_cost,
             po_id: null,
             notes: `Shipment ${invoice_number}`
-          }])
+          })
 
           if (enRouteError) {
             console.error('Error creating en_route inventory:', enRouteError)

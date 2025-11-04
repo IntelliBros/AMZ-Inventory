@@ -55,7 +55,7 @@ export default async function PurchaseOrdersPage() {
 
   const { data: products } = await supabase
     .from('products')
-    .select('id, sku, name, current_cost')
+    .select('id, sku, name, asin, current_cost')
     .eq('team_id', currentTeamId)
     .order('name')
 

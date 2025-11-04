@@ -26,6 +26,7 @@ interface Product {
   id: string
   sku: string
   name: string
+  asin: string | null
   current_cost: number
 }
 
@@ -463,7 +464,7 @@ export default function PurchaseOrderModal({ purchaseOrder, products, suppliers,
                       <option value="">Select product</option>
                       {products.map((product) => (
                         <option key={product.id} value={product.id}>
-                          {product.name} (SKU: {product.sku})
+                          {product.asin ? `${product.asin} | ` : ''}{product.sku} | {product.name}
                         </option>
                       ))}
                     </select>

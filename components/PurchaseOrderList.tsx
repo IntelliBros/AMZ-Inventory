@@ -26,6 +26,7 @@ type Product = {
   id: string
   sku: string
   name: string
+  asin: string | null
   current_cost: number
 }
 

@@ -21,44 +21,33 @@ type Product = {
   current_shipping_cost: number
 }
 
-type WarehouseSnapshot = {
-  product_id: string
-  quantity: number
-  snapshot_date: string
-  products: {
-    id: string
-    sku: string
-    name: string
-    current_cost: number
-    current_shipping_cost: number
-  } | null
-}
-
 interface InventoryListProps {
   inventory: InventoryLocation[]
   products: Product[]
-  warehouseSnapshots: WarehouseSnapshot[]
 }
 
 const locationTypeLabels = {
-  warehouse: 'Amazon Warehouse',
-  en_route: 'En Route',
-  storage: 'Storage',
+  fba: '✓ Available (FBA)',
+  receiving: '⏳ Receiving',
+  en_route: '🚚 In Transit',
+  storage: '📦 In Storage',
   production: 'In Production',
 }
 
 const locationTypeColors = {
-  warehouse: 'bg-blue-500',
+  fba: 'bg-green-500',
+  receiving: 'bg-orange-500',
   en_route: 'bg-yellow-500',
   storage: 'bg-purple-500',
-  production: 'bg-green-500',
+  production: 'bg-blue-500',
 }
 
 const locationTypeBadgeColors = {
-  warehouse: 'bg-blue-100 text-blue-800',
+  fba: 'bg-green-100 text-green-800',
+  receiving: 'bg-orange-100 text-orange-800',
   en_route: 'bg-yellow-100 text-yellow-800',
   storage: 'bg-purple-100 text-purple-800',
-  production: 'bg-green-100 text-green-800',
+  production: 'bg-blue-100 text-blue-800',
 }
 
 interface ProductInventory {
@@ -70,7 +59,8 @@ interface ProductInventory {
   current_cost: number
   current_shipping_cost: number
   locations: {
-    warehouse: number
+    fba: number
+    receiving: number
     en_route: number
     storage: number
     production: number
@@ -79,7 +69,7 @@ interface ProductInventory {
   total_value: number
 }
 
-function InventoryList({ inventory, products, warehouseSnapshots }: InventoryListProps) {
+function InventoryList({ inventory, products }: InventoryListProps) {
   // Aggregate inventory by product
   const productInventories = useMemo(() => {
     const aggregated: Record<string, ProductInventory> = {}
@@ -96,7 +86,8 @@ function InventoryList({ inventory, products, warehouseSnapshots }: InventoryLis
           current_cost: item.products.current_cost,
           current_shipping_cost: item.products.current_shipping_cost,
           locations: {
-            warehouse: 0,
+            fba: 0,
+            receiving: 0,
             en_route: 0,
             storage: 0,
             production: 0,
@@ -106,9 +97,11 @@ function InventoryList({ inventory, products, warehouseSnapshots }: InventoryLis
         }
       }
 
-      // Map 'fba' location_type to 'warehouse' for display
-      const displayLocationType = (item.location_type as string) === 'fba' ? 'warehouse' : item.location_type
-      aggregated[item.product_id].locations[displayLocationType] += item.quantity
+      // Use location_type as-is (now includes fba and receiving separately)
+      const locationType = item.location_type as keyof ProductInventory['locations']
+      if (locationType in aggregated[item.product_id].locations) {
+        aggregated[item.product_id].locations[locationType] += item.quantity
+      }
       aggregated[item.product_id].total_quantity += item.quantity
       aggregated[item.product_id].total_value += item.quantity * (item.unit_cost + item.unit_shipping_cost)
     })
@@ -121,19 +114,23 @@ function InventoryList({ inventory, products, warehouseSnapshots }: InventoryLis
     const totals: Record<string, { quantity: number; value: number }> = {}
 
     // Initialize all location types
-    totals.warehouse = { quantity: 0, value: 0 }
+    totals.fba = { quantity: 0, value: 0 }
+    totals.receiving = { quantity: 0, value: 0 }
     totals.en_route = { quantity: 0, value: 0 }
     totals.storage = { quantity: 0, value: 0 }
     totals.production = { quantity: 0, value: 0 }
 
-    // Process ALL inventory including FBA (warehouse)
+    // Process all inventory with new location types
     inventory.forEach((item) => {
-      // Map 'fba' location_type to 'warehouse' for display
-      const displayLocationType = (item.location_type as string) === 'fba' ? 'warehouse' : item.location_type
+      const locationType = item.location_type as string
+
+      if (!totals[locationType]) {
+        totals[locationType] = { quantity: 0, value: 0 }
+      }
 
       const totalUnitCost = item.unit_cost + item.unit_shipping_cost
-      totals[displayLocationType].quantity += item.quantity
-      totals[displayLocationType].value += item.quantity * totalUnitCost
+      totals[locationType].quantity += item.quantity
+      totals[locationType].value += item.quantity * totalUnitCost
     })
 
     return totals
@@ -147,11 +144,38 @@ function InventoryList({ inventory, products, warehouseSnapshots }: InventoryLis
     )
   }
 
+  // Calculate "At Amazon" total (FBA + Receiving)
+  const atAmazonQty = totalsByLocation.fba.quantity + totalsByLocation.receiving.quantity
+  const atAmazonValue = totalsByLocation.fba.value + totalsByLocation.receiving.value
+
   return (
     <>
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        {Object.entries(locationTypeLabels).map(([key, label]) => {
+        {/* At Amazon Card (FBA + Receiving) */}
+        <div className="bg-white rounded-lg shadow p-4 border-2 border-[#FF9900]">
+          <div>
+            <p className="text-sm font-bold text-[#FF9900] uppercase">At Amazon</p>
+            <p className="text-2xl font-bold text-gray-900">{atAmazonQty}</p>
+            <p className="text-sm text-gray-500 mb-3">${atAmazonValue.toFixed(2)}</p>
+
+            {/* Breakdown */}
+            <div className="space-y-1 pt-2 border-t border-gray-200">
+              <div className="flex justify-between text-xs">
+                <span className="text-green-600">✓ Available (FBA)</span>
+                <span className="font-medium text-gray-900">{totalsByLocation.fba.quantity}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-orange-600">⏳ Receiving</span>
+                <span className="font-medium text-gray-900">{totalsByLocation.receiving.quantity}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Other Location Cards */}
+        {['en_route', 'storage', 'production'].map((key) => {
+          const label = locationTypeLabels[key as keyof typeof locationTypeLabels]
           const data = totalsByLocation[key as keyof typeof locationTypeLabels] || { quantity: 0, value: 0 }
           return (
             <div key={key} className="bg-white rounded-lg shadow p-4">
@@ -206,7 +230,41 @@ function InventoryList({ inventory, products, warehouseSnapshots }: InventoryLis
                 <div className="flex-1 border-l border-gray-200 pl-6">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2.5">Inventory by Location</p>
                   <div className="space-y-2">
-                    {Object.entries(locationTypeLabels).map(([key, label]) => {
+                    {/* At Amazon Section */}
+                    <div className="bg-orange-50 rounded p-2 -mx-1">
+                      <p className="text-xs font-semibold text-[#FF9900] uppercase mb-1.5">At Amazon</p>
+                      {['fba', 'receiving'].map((key) => {
+                        const label = locationTypeLabels[key as keyof typeof locationTypeLabels]
+                        const quantity = productInv.locations[key as keyof typeof productInv.locations]
+                        const percentage = productInv.total_quantity > 0
+                          ? (quantity / productInv.total_quantity) * 100
+                          : 0
+
+                        return (
+                          <div key={key} className="mb-1.5">
+                            <div className="flex justify-between items-center mb-0.5">
+                              <div className="flex items-center">
+                                <div className={`w-2 h-2 rounded-full ${locationTypeColors[key as keyof typeof locationTypeColors]} mr-2`}></div>
+                                <span className="text-xs text-gray-700">{label}</span>
+                              </div>
+                              <span className="text-xs font-medium text-gray-900">{quantity}</span>
+                            </div>
+                            {quantity > 0 && (
+                              <div className="w-full bg-gray-200 rounded-full h-1">
+                                <div
+                                  className={`h-1 rounded-full ${locationTypeColors[key as keyof typeof locationTypeColors]}`}
+                                  style={{ width: `${percentage}%` }}
+                                ></div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Other Locations */}
+                    {['en_route', 'storage', 'production'].map((key) => {
+                      const label = locationTypeLabels[key as keyof typeof locationTypeLabels]
                       const quantity = productInv.locations[key as keyof typeof productInv.locations]
                       const percentage = productInv.total_quantity > 0
                         ? (quantity / productInv.total_quantity) * 100

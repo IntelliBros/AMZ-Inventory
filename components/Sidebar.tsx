@@ -11,7 +11,6 @@ import {
   ClockIcon,
   ShoppingCartIcon,
   TruckIcon,
-  BuildingOfficeIcon,
   ChartBarIcon,
   UserGroupIcon
 } from '@heroicons/react/24/outline'
@@ -24,7 +23,6 @@ const navigation = [
   { name: 'Inventory History', href: '/inventory-history', icon: ClockIcon },
   { name: 'Purchase Orders', href: '/purchase-orders', icon: ShoppingCartIcon },
   { name: 'Shipping', href: '/shipping', icon: TruckIcon },
-  { name: 'Warehouse', href: '/warehouse-snapshots', icon: BuildingOfficeIcon },
   { name: 'Sales', href: '/sales', icon: ChartBarIcon },
   { name: 'Team', href: '/team', icon: UserGroupIcon },
 ]

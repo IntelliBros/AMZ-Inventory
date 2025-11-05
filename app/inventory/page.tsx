@@ -50,25 +50,6 @@ export default async function InventoryPage() {
     .eq('team_id', currentTeamId)
     .order('name')
 
-  // Get latest warehouse snapshots for each product (filtered by team)
-  const { data: warehouseSnapshots } = await supabase
-    .from('warehouse_snapshots')
-    .select(`
-      product_id,
-      quantity,
-      snapshot_date,
-      products!inner (
-        id,
-        sku,
-        name,
-        current_cost,
-        current_shipping_cost,
-        team_id
-      )
-    `)
-    .eq('products.team_id', currentTeamId)
-    .order('snapshot_date', { ascending: false })
-
   return (
     <MainLayout>
       <div className="px-8 py-6">
@@ -85,7 +66,6 @@ export default async function InventoryPage() {
           <InventoryList
             inventory={inventory || []}
             products={products || []}
-            warehouseSnapshots={warehouseSnapshots || []}
           />
         )}
       </div>

@@ -24,66 +24,37 @@ type PurchaseOrder = Database['public']['Tables']['purchase_orders']['Row'] & {
 
 type SalesRecord = Database['public']['Tables']['sales_records']['Row']
 
-type WarehouseSnapshot = {
-  product_id: string
-  quantity: number
-  snapshot_date: string
-  products: {
-    id: string
-    sku: string
-    name: string
-    current_cost: number
-    current_shipping_cost: number
-  } | null
-}
-
 interface DashboardProps {
   inventory: InventoryLocation[]
   products: Product[]
   purchaseOrders: PurchaseOrder[]
   salesRecords: SalesRecord[]
-  warehouseSnapshots: WarehouseSnapshot[]
 }
 
-function Dashboard({ inventory, products, purchaseOrders, salesRecords, warehouseSnapshots }: DashboardProps) {
+function Dashboard({ inventory, products, purchaseOrders, salesRecords }: DashboardProps) {
   const stats = useMemo(() => {
-    // Calculate inventory values by location type (updated for new flow)
+    // Calculate inventory values by location type (now includes fba + receiving)
     const locationStats = {
-      warehouse: { quantity: 0, value: 0 },
+      amazon: { quantity: 0, value: 0 }, // Combined FBA + Receiving
       en_route: { quantity: 0, value: 0 },
       storage: { quantity: 0, value: 0 },
       production: { quantity: 0, value: 0 },
     }
 
-    // Process regular inventory (excluding warehouse - that comes from snapshots)
+    // Process all inventory with new location types
     inventory.forEach((item) => {
-      // Skip warehouse location type - we get that from snapshots now
-      if (item.location_type === 'warehouse') return
-
       const totalUnitCost = item.unit_cost + item.unit_shipping_cost
       const itemValue = item.quantity * totalUnitCost
 
-      locationStats[item.location_type].quantity += item.quantity
-      locationStats[item.location_type].value += itemValue
-    })
+      const locationType = item.location_type as string
 
-    // Get latest snapshot per product for warehouse inventory
-    const latestSnapshots = new Map<string, WarehouseSnapshot>()
-    warehouseSnapshots.forEach(snapshot => {
-      const existing = latestSnapshots.get(snapshot.product_id)
-      if (!existing || new Date(snapshot.snapshot_date) > new Date(existing.snapshot_date)) {
-        latestSnapshots.set(snapshot.product_id, snapshot)
-      }
-    })
-
-    // Add warehouse inventory from latest snapshots
-    latestSnapshots.forEach(snapshot => {
-      if (snapshot.products) {
-        const totalUnitCost = snapshot.products.current_cost + snapshot.products.current_shipping_cost
-        const itemValue = snapshot.quantity * totalUnitCost
-
-        locationStats.warehouse.quantity += snapshot.quantity
-        locationStats.warehouse.value += itemValue
+      // Group fba and receiving as "amazon"
+      if (locationType === 'fba' || locationType === 'receiving') {
+        locationStats.amazon.quantity += item.quantity
+        locationStats.amazon.value += itemValue
+      } else if (locationType in locationStats) {
+        locationStats[locationType as keyof typeof locationStats].quantity += item.quantity
+        locationStats[locationType as keyof typeof locationStats].value += itemValue
       }
     })
 
@@ -139,17 +110,17 @@ function Dashboard({ inventory, products, purchaseOrders, salesRecords, warehous
   }, [inventory, products, purchaseOrders, salesRecords])
 
   const locationLabels = {
-    warehouse: 'Amazon Warehouse',
+    amazon: 'At Amazon (FBA + Receiving)',
     en_route: 'En Route to Amazon',
     storage: 'In Storage',
     production: 'In Production',
   }
 
   const locationColors = {
-    warehouse: 'bg-blue-500',
+    amazon: 'bg-[#FF9900]',
     en_route: 'bg-yellow-500',
     storage: 'bg-purple-500',
-    production: 'bg-green-500',
+    production: 'bg-blue-500',
   }
 
   return (

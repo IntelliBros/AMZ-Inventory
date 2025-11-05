@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, getCurrentTeamId } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import MainLayout from '@/components/MainLayout'
-import SalesTrackingView from '@/components/SalesTrackingView'
+import SalesSnapshotList from '@/components/SalesSnapshotList'
+import Link from 'next/link'
 
 export default async function SalesPage() {
   const supabase = await createClient()
@@ -24,50 +25,51 @@ export default async function SalesPage() {
     throw new Error('No team access')
   }
 
-  // Fetch sales records with product details (filtered by team)
-  const { data: salesRecords, error: salesError } = await supabase
-    .from('sales_records')
+  // Fetch sales snapshots with product details
+  const { data: salesSnapshots, error: salesError } = await (supabase as any)
+    .from('sales_snapshots')
     .select(`
       *,
       products (
         id,
         sku,
         name,
+        asin,
         current_cost
       )
     `)
     .eq('team_id', currentTeamId)
-    .order('end_date', { ascending: false })
+    .order('period_start', { ascending: false })
 
   if (salesError) {
-    console.error('Error fetching sales records:', salesError)
-  }
-
-  // Fetch products for filtering (filtered by team)
-  const { data: products, error: productsError } = await supabase
-    .from('products')
-    .select('id, sku, name')
-    .eq('team_id', currentTeamId)
-    .order('name')
-
-  if (productsError) {
-    console.error('Error fetching products:', productsError)
+    console.error('Error fetching sales snapshots:', salesError)
   }
 
   return (
     <MainLayout>
-      <div className="px-8 py-6 max-w-[calc(100vw-16rem)] overflow-hidden">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-[#0F1111]">Sales Tracking</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Auto-calculated sales data from warehouse snapshots. Track units sold, sales velocity, and inventory turnover.
-          </p>
+      <div className="px-8 py-6">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-[#0F1111]">Sales Tracking</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Actual sales data imported from Amazon Business Reports
+            </p>
+          </div>
+          <Link
+            href="/sales-import"
+            className="px-4 py-2 bg-[#FF9900] text-white rounded-md hover:bg-[#FA8900] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF9900] font-medium"
+          >
+            Import Sales Data
+          </Link>
         </div>
 
-        <SalesTrackingView
-          salesRecords={salesRecords || []}
-          products={products || []}
-        />
+        {salesError ? (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <p className="text-red-800">Error loading sales data: {salesError.message}</p>
+          </div>
+        ) : (
+          <SalesSnapshotList salesSnapshots={salesSnapshots || []} />
+        )}
       </div>
     </MainLayout>
   )

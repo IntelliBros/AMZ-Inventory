@@ -69,25 +69,6 @@ export default async function HomePage() {
     .order('end_date', { ascending: false })
     .limit(30)
 
-  // Get latest warehouse snapshots for each product (filtered by team)
-  const { data: warehouseSnapshots } = await supabase
-    .from('warehouse_snapshots')
-    .select(`
-      product_id,
-      quantity,
-      snapshot_date,
-      products!inner (
-        id,
-        sku,
-        name,
-        current_cost,
-        current_shipping_cost,
-        user_id
-      )
-    `)
-    .eq('products.team_id', currentTeamId)
-    .order('snapshot_date', { ascending: false })
-
   return (
     <MainLayout>
       <div className="px-8 py-6">
@@ -96,7 +77,6 @@ export default async function HomePage() {
           products={products || []}
           purchaseOrders={purchaseOrders || []}
           salesRecords={salesRecords || []}
-          warehouseSnapshots={warehouseSnapshots || []}
         />
       </div>
     </MainLayout>

@@ -148,7 +148,7 @@ export async function PATCH(
       }
     }
 
-    // If marking as delivered, move inventory from receiving to fba
+    // If marking as delivered, move inventory from either en_route or receiving to fba
     if (status === 'delivered' && invoice.status !== 'delivered') {
       // Get all line items for this invoice
       const { data: lineItems } = await (supabase as any)
@@ -158,7 +158,10 @@ export async function PATCH(
 
       if (lineItems && lineItems.length > 0) {
         for (const item of lineItems) {
-          // Find receiving inventory for this product
+          let unitCost = 0
+          let unitShippingCost = 0
+
+          // First try to find receiving inventory for this product
           const { data: receivingInventories } = await supabase
             .from('inventory_locations')
             .select('*')
@@ -168,8 +171,8 @@ export async function PATCH(
             .order('created_at', { ascending: true })
 
           if (receivingInventories && receivingInventories.length > 0) {
-            const unitCost = (receivingInventories[0] as any)?.unit_cost || 0
-            const unitShippingCost = (receivingInventories[0] as any)?.unit_shipping_cost || 0
+            unitCost = (receivingInventories[0] as any)?.unit_cost || 0
+            unitShippingCost = (receivingInventories[0] as any)?.unit_shipping_cost || 0
 
             // Delete receiving inventory
             for (const receiving of receivingInventories) {
@@ -178,25 +181,47 @@ export async function PATCH(
                 .delete()
                 .eq('id', (receiving as any).id)
             }
+          } else {
+            // If not in receiving, check if still in en_route (direct delivery without receiving step)
+            const { data: enRouteInventories } = await supabase
+              .from('inventory_locations')
+              .select('*')
+              .eq('product_id', item.product_id)
+              .eq('location_type', 'en_route')
+              .or(`notes.ilike.%Shipment ${invoice.invoice_number}%`)
+              .order('created_at', { ascending: true })
 
-            // Create FBA inventory with detailed delivery notes
-            const actualFullyReceivedDate = data?.fully_received_date || fully_received_date || new Date().toISOString().split('T')[0]
-            const deliveryDate = new Date(actualFullyReceivedDate).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric'
-            })
+            if (enRouteInventories && enRouteInventories.length > 0) {
+              unitCost = (enRouteInventories[0] as any)?.unit_cost || 0
+              unitShippingCost = (enRouteInventories[0] as any)?.unit_shipping_cost || 0
 
-            await (supabase as any).from('inventory_locations').insert({
-              product_id: item.product_id,
-              location_type: 'fba',
-              quantity: item.quantity,
-              unit_cost: unitCost,
-              unit_shipping_cost: unitShippingCost,
-              po_id: null,
-              notes: `Fully received at FBA on ${deliveryDate} - Shipment ${invoice.invoice_number} (${item.quantity} units)`
-            })
+              // Delete en_route inventory
+              for (const enRoute of enRouteInventories) {
+                await supabase
+                  .from('inventory_locations')
+                  .delete()
+                  .eq('id', (enRoute as any).id)
+              }
+            }
           }
+
+          // Create FBA inventory with detailed delivery notes
+          const actualFullyReceivedDate = data?.fully_received_date || fully_received_date || new Date().toISOString().split('T')[0]
+          const deliveryDate = new Date(actualFullyReceivedDate).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          })
+
+          await (supabase as any).from('inventory_locations').insert({
+            product_id: item.product_id,
+            location_type: 'fba',
+            quantity: item.quantity,
+            unit_cost: unitCost,
+            unit_shipping_cost: unitShippingCost,
+            po_id: null,
+            notes: `Fully received at FBA on ${deliveryDate} - Shipment ${invoice.invoice_number} (${item.quantity} units)`
+          })
         }
       }
     }

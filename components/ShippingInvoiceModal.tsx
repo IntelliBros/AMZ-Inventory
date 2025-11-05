@@ -38,6 +38,7 @@ interface StorageInventory {
   product_id: string
   product_name: string
   product_sku: string
+  product_asin: string | null
   total_available: number
 }
 
@@ -128,6 +129,7 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
               product_id: item.product_id,
               product_name: item.products?.name || 'Unknown',
               product_sku: item.products?.sku || 'N/A',
+              product_asin: item.products?.asin || null,
               total_available: 0,
             }
           }
@@ -557,7 +559,7 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
                   <ul className="text-xs text-blue-700 space-y-1">
                     {storageInventory.slice(0, 5).map((inv) => (
                       <li key={inv.product_id}>
-                        • {inv.product_name} ({inv.product_sku}): <strong>{inv.total_available} units</strong>
+                        • {inv.product_asin ? `${inv.product_asin} | ` : ''}{inv.product_sku} | {inv.product_name}: <strong>{inv.total_available} units</strong>
                       </li>
                     ))}
                     {storageInventory.length > 5 && (
@@ -639,7 +641,7 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
                               <option value="">Select product</option>
                               {storageInventory.map((inv) => (
                                 <option key={inv.product_id} value={inv.product_id}>
-                                  {inv.product_name} ({inv.product_sku}) - {inv.total_available} available
+                                  {inv.product_asin ? `${inv.product_asin} | ` : ''}{inv.product_sku} | {inv.product_name} - {inv.total_available} available
                                 </option>
                               ))}
                             </select>

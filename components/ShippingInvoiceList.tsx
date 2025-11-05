@@ -89,7 +89,7 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
   const handleMarkAsDelivered = async (invoice: ShippingInvoice, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent opening the edit modal
 
-    if (!confirm(`Mark shipment ${invoice.invoice_number} as delivered? This will move inventory to FBA.`)) {
+    if (!confirm(`Mark shipment ${invoice.invoice_number} as delivered? This will move inventory to Amazon receiving.`)) {
       return
     }
 
@@ -107,6 +107,37 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
       if (!response.ok) {
         const error = await response.json()
         throw new Error(error.error || 'Failed to mark as delivered')
+      }
+
+      router.refresh()
+    } catch (err: any) {
+      alert(`Error: ${err.message}`)
+    } finally {
+      setUpdating(null)
+    }
+  }
+
+  const handleMarkAsComplete = async (invoice: ShippingInvoice, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent opening the edit modal
+
+    if (!confirm(`Mark shipment ${invoice.invoice_number} as complete? This will move inventory from receiving to FBA (available for sale).`)) {
+      return
+    }
+
+    setUpdating(invoice.id)
+
+    try {
+      // Update shipment status to complete via API
+      const response = await fetch(`/api/shipping-invoices/${invoice.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'complete' }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to mark as complete')
       }
 
       router.refresh()
@@ -146,12 +177,14 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
                           Invoice #{invoice.invoice_number}
                         </p>
                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                          invoice.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                          invoice.status === 'complete' ? 'bg-green-100 text-green-800' :
+                          invoice.status === 'delivered' ? 'bg-orange-100 text-orange-800' :
                           invoice.status === 'in_transit' ? 'bg-yellow-100 text-yellow-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
-                          {invoice.status === 'in_transit' ? 'In Transit' :
-                           invoice.status === 'delivered' ? 'Delivered' : 'Pending'}
+                          {invoice.status === 'complete' ? 'Complete' :
+                           invoice.status === 'delivered' ? 'Delivered' :
+                           invoice.status === 'in_transit' ? 'In Transit' : 'Pending'}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 text-xs text-gray-500">
@@ -206,11 +239,20 @@ export default function ShippingInvoiceList({ shippingInvoices, products }: Ship
                         </label>
                       )}
 
-                      {invoice.status !== 'delivered' && (
+                      {/* Show appropriate button based on status */}
+                      {invoice.status === 'delivered' ? (
+                        <button
+                          onClick={(e) => handleMarkAsComplete(invoice, e)}
+                          disabled={updating === invoice.id}
+                          className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                        >
+                          {updating === invoice.id ? 'Updating...' : 'Mark as Complete'}
+                        </button>
+                      ) : invoice.status !== 'complete' && (
                         <button
                           onClick={(e) => handleMarkAsDelivered(invoice, e)}
                           disabled={updating === invoice.id}
-                          className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                          className="px-3 py-1.5 bg-orange-600 text-white text-xs font-medium rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                         >
                           {updating === invoice.id ? 'Updating...' : 'Mark as Delivered'}
                         </button>

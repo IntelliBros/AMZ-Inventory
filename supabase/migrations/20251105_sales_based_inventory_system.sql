@@ -48,7 +48,7 @@ BEGIN
   END IF;
 END $$;
 
--- Update status enum to include 'receiving'
+-- Update status enum to include 'receiving' and 'complete'
 DO $$
 BEGIN
   -- Check if the type exists and doesn't have 'receiving' yet
@@ -58,6 +58,15 @@ BEGIN
     AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'shipment_status')
   ) THEN
     ALTER TYPE shipment_status ADD VALUE 'receiving' AFTER 'in_transit';
+  END IF;
+
+  -- Check if the type exists and doesn't have 'complete' yet
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_enum
+    WHERE enumlabel = 'complete'
+    AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'shipment_status')
+  ) THEN
+    ALTER TYPE shipment_status ADD VALUE 'complete' AFTER 'delivered';
   END IF;
 EXCEPTION
   WHEN OTHERS THEN

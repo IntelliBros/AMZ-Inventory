@@ -329,7 +329,7 @@ export interface Database {
           fully_received_date: string | null
           carrier: string
           tracking_number: string | null
-          status: 'pending' | 'in_transit' | 'receiving' | 'delivered'
+          status: 'pending' | 'in_transit' | 'receiving' | 'delivered' | 'complete'
           total_shipping_cost: number
           notes: string | null
           document_url: string | null
@@ -346,7 +346,7 @@ export interface Database {
           fully_received_date?: string | null
           carrier: string
           tracking_number?: string | null
-          status?: 'pending' | 'in_transit' | 'receiving' | 'delivered'
+          status?: 'pending' | 'in_transit' | 'receiving' | 'delivered' | 'complete'
           total_shipping_cost: number
           notes?: string | null
           document_url?: string | null
@@ -363,7 +363,7 @@ export interface Database {
           fully_received_date?: string | null
           carrier?: string
           tracking_number?: string | null
-          status?: 'pending' | 'in_transit' | 'receiving' | 'delivered'
+          status?: 'pending' | 'in_transit' | 'receiving' | 'delivered' | 'complete'
           total_shipping_cost?: number
           notes?: string | null
           document_url?: string | null

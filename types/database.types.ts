@@ -284,6 +284,7 @@ export interface Database {
           team_id: string
           invoice_number: string
           shipping_date: string
+          delivery_date: string | null
           carrier: string
           tracking_number: string | null
           status: 'pending' | 'in_transit' | 'delivered'
@@ -299,6 +300,7 @@ export interface Database {
           team_id: string
           invoice_number: string
           shipping_date: string
+          delivery_date?: string | null
           carrier: string
           tracking_number?: string | null
           status?: 'pending' | 'in_transit' | 'delivered'
@@ -314,6 +316,7 @@ export interface Database {
           team_id?: string
           invoice_number?: string
           shipping_date?: string
+          delivery_date?: string | null
           carrier?: string
           tracking_number?: string | null
           status?: 'pending' | 'in_transit' | 'delivered'

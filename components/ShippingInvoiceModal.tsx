@@ -72,6 +72,7 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
   const [formData, setFormData] = useState({
     invoice_number: shippingInvoice?.invoice_number || '',
     shipping_date: shippingInvoice?.shipping_date || new Date().toISOString().split('T')[0],
+    delivery_date: shippingInvoice?.delivery_date || '',
     carrier: shippingInvoice?.carrier || '',
     tracking_number: shippingInvoice?.tracking_number || '',
     status: (shippingInvoice?.status as ShipmentStatus) || 'pending' as ShipmentStatus,
@@ -258,11 +259,18 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
 
   // Handle status change: convert inventory via API
   const handleStatusChange = async (invoiceId: string, newStatus: ShipmentStatus) => {
+    const updateData: { status: ShipmentStatus; delivery_date?: string | null } = { status: newStatus }
+
+    // Include delivery_date when marking as delivered
+    if (newStatus === 'delivered') {
+      updateData.delivery_date = formData.delivery_date || new Date().toISOString().split('T')[0]
+    }
+
     const response = await fetch(`/api/shipping-invoices/${invoiceId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ status: newStatus }),
+      body: JSON.stringify(updateData),
     })
 
     if (!response.ok) {
@@ -287,6 +295,7 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
       const invoiceData = {
         invoice_number: formData.invoice_number,
         shipping_date: formData.shipping_date,
+        delivery_date: formData.delivery_date || null,
         carrier: formData.carrier,
         tracking_number: formData.tracking_number || null,
         status: formData.status,
@@ -482,7 +491,7 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Shipping Date *
@@ -493,6 +502,20 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
                 value={formData.shipping_date}
                 onChange={(e) => setFormData({ ...formData, shipping_date: e.target.value })}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Delivery Date {formData.status === 'delivered' && '*'}
+              </label>
+              <input
+                type="date"
+                required={formData.status === 'delivered'}
+                value={formData.delivery_date}
+                onChange={(e) => setFormData({ ...formData, delivery_date: e.target.value })}
+                disabled={formData.status !== 'delivered'}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
               />
             </div>
 

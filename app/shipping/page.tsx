@@ -35,6 +35,7 @@ export default async function ShippingPage() {
       team_id,
       invoice_number,
       shipping_date,
+      delivery_date,
       carrier,
       tracking_number,
       status,

@@ -35,14 +35,14 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { status } = body
+    const { status, delivery_date } = body
 
     const supabase = createServerClient()
 
     // Check that invoice belongs to current team
     const { data: invoice, error: invoiceError } = await (supabase as any)
       .from('shipping_invoices')
-      .select('team_id, invoice_number, status')
+      .select('team_id, invoice_number, status, delivery_date')
       .eq('id', id)
       .single()
 
@@ -69,10 +69,15 @@ export async function PATCH(
       )
     }
 
-    // Update invoice status
+    // Update invoice status and delivery_date
+    const updateData: { status: string; delivery_date?: string | null } = { status }
+    if (delivery_date !== undefined) {
+      updateData.delivery_date = delivery_date
+    }
+
     const { data, error } = await (supabase as any)
       .from('shipping_invoices')
-      .update({ status })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single()
@@ -124,7 +129,10 @@ export async function PATCH(
             // Create FBA inventory with detailed delivery notes
             const unitCost = (enRouteInventories[0] as any)?.unit_cost || 0
             const unitShippingCost = (enRouteInventories[0] as any)?.unit_shipping_cost || 0
-            const deliveryDate = new Date().toLocaleDateString('en-US', {
+
+            // Use the delivery_date from the updated invoice, or fall back to today
+            const actualDeliveryDate = data?.delivery_date || new Date().toISOString().split('T')[0]
+            const deliveryDate = new Date(actualDeliveryDate).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'short',
               day: 'numeric'

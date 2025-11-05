@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
     const {
       invoice_number,
       shipping_date,
+      delivery_date,
       carrier,
       tracking_number,
       status,
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
     const invoiceData = {
       invoice_number,
       shipping_date,
+      delivery_date: delivery_date || null,
       carrier,
       tracking_number: tracking_number || null,
       status: status || 'pending',

@@ -40,12 +40,11 @@ export async function PATCH(
     const supabase = createServerClient()
 
     // Check that invoice belongs to current team
-    // @ts-ignore
-    const { data: invoice, error: invoiceError } = await supabase
+    const { data: invoice, error: invoiceError } = await (supabase as any)
       .from('shipping_invoices')
       .select('team_id, invoice_number, status')
       .eq('id', id)
-      .single<{ team_id: string; invoice_number: string; status: string }>()
+      .single()
 
     if (invoiceError || !invoice) {
       return NextResponse.json(
@@ -71,23 +70,22 @@ export async function PATCH(
     }
 
     // Update invoice status
-    // @ts-ignore
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('shipping_invoices')
-      // @ts-ignore
       .update({ status })
       .eq('id', id)
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Error updating shipping invoice status:', error)
+      throw error
+    }
 
     // If marking as delivered, move inventory from en_route to fba
-    // @ts-ignore
     if (status === 'delivered' && invoice.status !== 'delivered') {
       // Get all line items for this invoice
-      // @ts-ignore
-      const { data: lineItems } = await supabase
+      const { data: lineItems } = await (supabase as any)
         .from('shipping_line_items')
         .select('product_id, quantity')
         .eq('shipping_invoice_id', id)
@@ -95,60 +93,47 @@ export async function PATCH(
       if (lineItems && lineItems.length > 0) {
         for (const item of lineItems) {
           // Find en_route inventory for this product
-          // @ts-ignore
           const { data: enRouteInventories } = await supabase
             .from('inventory_locations')
             .select('*')
-            // @ts-ignore
             .eq('product_id', item.product_id)
             .eq('location_type', 'en_route')
-            // @ts-ignore
             .eq('notes', `Shipment ${invoice.invoice_number}`)
             .order('created_at', { ascending: true })
 
           if (enRouteInventories && enRouteInventories.length > 0) {
-            // @ts-ignore
             let remainingToDeliver = item.quantity
 
             // Remove from en_route (FIFO)
             for (const enRoute of enRouteInventories) {
               if (remainingToDeliver <= 0) break
-              // @ts-ignore
-              if (enRoute.quantity <= remainingToDeliver) {
-                // @ts-ignore
-                await supabase.from('inventory_locations').delete().eq('id', enRoute.id)
-                // @ts-ignore
-                remainingToDeliver -= enRoute.quantity
+
+              const enRouteQty = (enRoute as any).quantity
+              if (enRouteQty <= remainingToDeliver) {
+                await supabase.from('inventory_locations').delete().eq('id', (enRoute as any).id)
+                remainingToDeliver -= enRouteQty
               } else {
-                await supabase
+                await (supabase as any)
                   .from('inventory_locations')
-                  // @ts-ignore
-                  .update({ quantity: enRoute.quantity - remainingToDeliver })
-                  // @ts-ignore
-                  .eq('id', enRoute.id)
+                  .update({ quantity: enRouteQty - remainingToDeliver })
+                  .eq('id', (enRoute as any).id)
                 remainingToDeliver = 0
               }
             }
 
             // Create FBA inventory
-            // @ts-ignore
-            const unitCost = enRouteInventories[0]?.unit_cost || 0
-            // @ts-ignore
-            const unitShippingCost = enRouteInventories[0]?.unit_shipping_cost || 0
+            const unitCost = (enRouteInventories[0] as any)?.unit_cost || 0
+            const unitShippingCost = (enRouteInventories[0] as any)?.unit_shipping_cost || 0
 
-            // @ts-ignore
-            await supabase.from('inventory_locations').insert([{
-              // @ts-ignore
+            await (supabase as any).from('inventory_locations').insert({
               product_id: item.product_id,
               location_type: 'fba',
-              // @ts-ignore
               quantity: item.quantity,
               unit_cost: unitCost,
               unit_shipping_cost: unitShippingCost,
               po_id: null,
-              // @ts-ignore
               notes: `Delivered: Shipment ${invoice.invoice_number}`
-            }])
+            })
           }
         }
       }
@@ -195,13 +180,12 @@ export async function DELETE(
 
     const supabase = createServerClient()
 
-    // Check that invoice belongs to current team
-    // @ts-ignore
-    const { data: invoice, error: invoiceError } = await supabase
+    // Check that invoice belongs to current team and get invoice_number
+    const { data: invoice, error: invoiceError } = await (supabase as any)
       .from('shipping_invoices')
-      .select('team_id')
+      .select('team_id, invoice_number')
       .eq('id', id)
-      .single<{ team_id: string }>()
+      .single()
 
     if (invoiceError || !invoice) {
       return NextResponse.json(
@@ -226,14 +210,60 @@ export async function DELETE(
       )
     }
 
+    // Before deleting, move inventory back from en_route to storage
+    const { data: lineItems } = await (supabase as any)
+      .from('shipping_line_items')
+      .select('product_id, quantity')
+      .eq('shipping_invoice_id', id)
+
+    if (lineItems && lineItems.length > 0) {
+      for (const item of lineItems) {
+        // Find en_route inventory for this shipment
+        const { data: enRouteInventories } = await supabase
+          .from('inventory_locations')
+          .select('*')
+          .eq('product_id', item.product_id)
+          .eq('location_type', 'en_route')
+          .eq('notes', `Shipment ${invoice.invoice_number}`)
+          .order('created_at', { ascending: true })
+
+        if (enRouteInventories && enRouteInventories.length > 0) {
+          // Get unit costs from the first en_route record
+          const unitCost = (enRouteInventories[0] as any)?.unit_cost || 0
+          const unitShippingCost = (enRouteInventories[0] as any)?.unit_shipping_cost || 0
+
+          // Delete en_route inventory
+          for (const enRoute of enRouteInventories) {
+            await supabase
+              .from('inventory_locations')
+              .delete()
+              .eq('id', (enRoute as any).id)
+          }
+
+          // Create storage inventory to return the items
+          await (supabase as any).from('inventory_locations').insert({
+            product_id: item.product_id,
+            location_type: 'storage',
+            quantity: item.quantity,
+            unit_cost: unitCost,
+            unit_shipping_cost: unitShippingCost,
+            po_id: null,
+            notes: `Returned from deleted shipment ${invoice.invoice_number}`
+          })
+        }
+      }
+    }
+
     // Delete the invoice (line items will be cascade deleted)
-    // @ts-ignore
     const { error } = await supabase
       .from('shipping_invoices')
       .delete()
       .eq('id', id)
 
-    if (error) throw error
+    if (error) {
+      console.error('Error deleting shipping invoice:', error)
+      throw error
+    }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

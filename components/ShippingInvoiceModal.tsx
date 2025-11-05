@@ -20,7 +20,7 @@ type ShippingInvoice = Database['public']['Tables']['shipping_invoices']['Row'] 
   }>
 }
 
-type ShipmentStatus = 'pending' | 'in_transit' | 'delivered'
+type ShipmentStatus = 'pending' | 'in_transit' | 'receiving' | 'delivered'
 
 interface Product {
   id: string
@@ -59,6 +59,7 @@ interface ShippingInvoiceModalProps {
 const shipmentStatuses: { value: ShipmentStatus; label: string }[] = [
   { value: 'pending', label: 'Pending' },
   { value: 'in_transit', label: 'In Transit' },
+  { value: 'receiving', label: 'Receiving' },
   { value: 'delivered', label: 'Delivered' },
 ]
 
@@ -72,7 +73,8 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
   const [formData, setFormData] = useState({
     invoice_number: shippingInvoice?.invoice_number || '',
     shipping_date: shippingInvoice?.shipping_date || new Date().toISOString().split('T')[0],
-    delivery_date: shippingInvoice?.delivery_date || '',
+    first_received_date: shippingInvoice?.first_received_date || '',
+    fully_received_date: shippingInvoice?.fully_received_date || '',
     carrier: shippingInvoice?.carrier || '',
     tracking_number: shippingInvoice?.tracking_number || '',
     status: (shippingInvoice?.status as ShipmentStatus) || 'pending' as ShipmentStatus,
@@ -259,11 +261,26 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
 
   // Handle status change: convert inventory via API
   const handleStatusChange = async (invoiceId: string, newStatus: ShipmentStatus) => {
-    const updateData: { status: ShipmentStatus; delivery_date?: string | null } = { status: newStatus }
+    const updateData: {
+      status: ShipmentStatus
+      first_received_date?: string | null
+      fully_received_date?: string | null
+    } = { status: newStatus }
 
-    // Include delivery_date when marking as delivered
+    // Include first_received_date when marking as receiving
+    if (newStatus === 'receiving') {
+      if (!formData.first_received_date) {
+        throw new Error('First received date is required when marking as receiving')
+      }
+      updateData.first_received_date = formData.first_received_date
+    }
+
+    // Include fully_received_date when marking as delivered
     if (newStatus === 'delivered') {
-      updateData.delivery_date = formData.delivery_date || new Date().toISOString().split('T')[0]
+      if (!formData.fully_received_date) {
+        throw new Error('Fully received date is required when marking as delivered')
+      }
+      updateData.fully_received_date = formData.fully_received_date
     }
 
     const response = await fetch(`/api/shipping-invoices/${invoiceId}`, {
@@ -295,7 +312,8 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
       const invoiceData = {
         invoice_number: formData.invoice_number,
         shipping_date: formData.shipping_date,
-        delivery_date: formData.delivery_date || null,
+        first_received_date: formData.first_received_date || null,
+        fully_received_date: formData.fully_received_date || null,
         carrier: formData.carrier,
         tracking_number: formData.tracking_number || null,
         status: formData.status,
@@ -491,7 +509,7 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
             </div>
           </div>
 
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-6 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Shipping Date *
@@ -507,13 +525,27 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Delivery Date {formData.status === 'delivered' && '*'}
+                First Received {formData.status === 'receiving' && '*'} {formData.status === 'delivered' && '*'}
+              </label>
+              <input
+                type="date"
+                required={formData.status === 'receiving' || formData.status === 'delivered'}
+                value={formData.first_received_date}
+                onChange={(e) => setFormData({ ...formData, first_received_date: e.target.value })}
+                disabled={formData.status !== 'receiving' && formData.status !== 'delivered'}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Fully Received {formData.status === 'delivered' && '*'}
               </label>
               <input
                 type="date"
                 required={formData.status === 'delivered'}
-                value={formData.delivery_date}
-                onChange={(e) => setFormData({ ...formData, delivery_date: e.target.value })}
+                value={formData.fully_received_date}
+                onChange={(e) => setFormData({ ...formData, fully_received_date: e.target.value })}
                 disabled={formData.status !== 'delivered'}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
               />

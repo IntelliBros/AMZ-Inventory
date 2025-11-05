@@ -275,6 +275,47 @@ export interface Database {
           total_cost?: number
         }
       }
+      sales_snapshots: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          team_id: string
+          product_id: string
+          period_start: string
+          period_end: string
+          units_sold: number
+          revenue: number
+          snapshot_date: string
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          team_id: string
+          product_id: string
+          period_start: string
+          period_end: string
+          units_sold: number
+          revenue: number
+          snapshot_date?: string
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          team_id?: string
+          product_id?: string
+          period_start?: string
+          period_end?: string
+          units_sold?: number
+          revenue?: number
+          snapshot_date?: string
+          notes?: string | null
+        }
+      }
       shipping_invoices: {
         Row: {
           id: string
@@ -284,10 +325,11 @@ export interface Database {
           team_id: string
           invoice_number: string
           shipping_date: string
-          delivery_date: string | null
+          first_received_date: string | null
+          fully_received_date: string | null
           carrier: string
           tracking_number: string | null
-          status: 'pending' | 'in_transit' | 'delivered'
+          status: 'pending' | 'in_transit' | 'receiving' | 'delivered'
           total_shipping_cost: number
           notes: string | null
           document_url: string | null
@@ -300,10 +342,11 @@ export interface Database {
           team_id: string
           invoice_number: string
           shipping_date: string
-          delivery_date?: string | null
+          first_received_date?: string | null
+          fully_received_date?: string | null
           carrier: string
           tracking_number?: string | null
-          status?: 'pending' | 'in_transit' | 'delivered'
+          status?: 'pending' | 'in_transit' | 'receiving' | 'delivered'
           total_shipping_cost: number
           notes?: string | null
           document_url?: string | null
@@ -316,10 +359,11 @@ export interface Database {
           team_id?: string
           invoice_number?: string
           shipping_date?: string
-          delivery_date?: string | null
+          first_received_date?: string | null
+          fully_received_date?: string | null
           carrier?: string
           tracking_number?: string | null
-          status?: 'pending' | 'in_transit' | 'delivered'
+          status?: 'pending' | 'in_transit' | 'receiving' | 'delivered'
           total_shipping_cost?: number
           notes?: string | null
           document_url?: string | null

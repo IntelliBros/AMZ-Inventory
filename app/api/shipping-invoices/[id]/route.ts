@@ -35,14 +35,14 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { status, delivery_date } = body
+    const { status, first_received_date, fully_received_date } = body
 
     const supabase = createServerClient()
 
     // Check that invoice belongs to current team
     const { data: invoice, error: invoiceError } = await (supabase as any)
       .from('shipping_invoices')
-      .select('team_id, invoice_number, status, delivery_date')
+      .select('team_id, invoice_number, status, first_received_date, fully_received_date')
       .eq('id', id)
       .single()
 
@@ -69,10 +69,18 @@ export async function PATCH(
       )
     }
 
-    // Update invoice status and delivery_date
-    const updateData: { status: string; delivery_date?: string | null } = { status }
-    if (delivery_date !== undefined) {
-      updateData.delivery_date = delivery_date
+    // Update invoice status and dates
+    const updateData: {
+      status: string
+      first_received_date?: string | null
+      fully_received_date?: string | null
+    } = { status }
+
+    if (first_received_date !== undefined) {
+      updateData.first_received_date = first_received_date
+    }
+    if (fully_received_date !== undefined) {
+      updateData.fully_received_date = fully_received_date
     }
 
     const { data, error } = await (supabase as any)
@@ -87,8 +95,8 @@ export async function PATCH(
       throw error
     }
 
-    // If marking as delivered, move inventory from en_route to fba
-    if (status === 'delivered' && invoice.status !== 'delivered') {
+    // If marking as "receiving", move inventory from en_route to receiving
+    if (status === 'receiving' && invoice.status !== 'receiving') {
       // Get all line items for this invoice
       const { data: lineItems } = await (supabase as any)
         .from('shipping_line_items')
@@ -103,36 +111,77 @@ export async function PATCH(
             .select('*')
             .eq('product_id', item.product_id)
             .eq('location_type', 'en_route')
-            .eq('notes', `Shipment ${invoice.invoice_number}`)
+            .eq('notes', `Shipped on ${new Date(invoice.shipping_date || '').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} - Shipment ${invoice.invoice_number} via ${invoice.carrier || ''} (${item.quantity} units)`)
             .order('created_at', { ascending: true })
 
           if (enRouteInventories && enRouteInventories.length > 0) {
-            let remainingToDeliver = item.quantity
-
-            // Remove from en_route (FIFO)
-            for (const enRoute of enRouteInventories) {
-              if (remainingToDeliver <= 0) break
-
-              const enRouteQty = (enRoute as any).quantity
-              if (enRouteQty <= remainingToDeliver) {
-                await supabase.from('inventory_locations').delete().eq('id', (enRoute as any).id)
-                remainingToDeliver -= enRouteQty
-              } else {
-                await (supabase as any)
-                  .from('inventory_locations')
-                  .update({ quantity: enRouteQty - remainingToDeliver })
-                  .eq('id', (enRoute as any).id)
-                remainingToDeliver = 0
-              }
-            }
-
-            // Create FBA inventory with detailed delivery notes
             const unitCost = (enRouteInventories[0] as any)?.unit_cost || 0
             const unitShippingCost = (enRouteInventories[0] as any)?.unit_shipping_cost || 0
 
-            // Use the delivery_date from the updated invoice, or fall back to today
-            const actualDeliveryDate = data?.delivery_date || new Date().toISOString().split('T')[0]
-            const deliveryDate = new Date(actualDeliveryDate).toLocaleDateString('en-US', {
+            // Delete en_route inventory
+            for (const enRoute of enRouteInventories) {
+              await supabase
+                .from('inventory_locations')
+                .delete()
+                .eq('id', (enRoute as any).id)
+            }
+
+            // Create receiving inventory
+            const firstReceivedDate = data?.first_received_date || first_received_date || new Date().toISOString().split('T')[0]
+            const receivingDate = new Date(firstReceivedDate).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            })
+
+            await (supabase as any).from('inventory_locations').insert({
+              product_id: item.product_id,
+              location_type: 'receiving',
+              quantity: item.quantity,
+              unit_cost: unitCost,
+              unit_shipping_cost: unitShippingCost,
+              po_id: null,
+              notes: `Receiving started on ${receivingDate} - Shipment ${invoice.invoice_number} (${item.quantity} units)`
+            })
+          }
+        }
+      }
+    }
+
+    // If marking as delivered, move inventory from receiving to fba
+    if (status === 'delivered' && invoice.status !== 'delivered') {
+      // Get all line items for this invoice
+      const { data: lineItems } = await (supabase as any)
+        .from('shipping_line_items')
+        .select('product_id, quantity')
+        .eq('shipping_invoice_id', id)
+
+      if (lineItems && lineItems.length > 0) {
+        for (const item of lineItems) {
+          // Find receiving inventory for this product
+          const { data: receivingInventories } = await supabase
+            .from('inventory_locations')
+            .select('*')
+            .eq('product_id', item.product_id)
+            .eq('location_type', 'receiving')
+            .or(`notes.ilike.%Shipment ${invoice.invoice_number}%`)
+            .order('created_at', { ascending: true })
+
+          if (receivingInventories && receivingInventories.length > 0) {
+            const unitCost = (receivingInventories[0] as any)?.unit_cost || 0
+            const unitShippingCost = (receivingInventories[0] as any)?.unit_shipping_cost || 0
+
+            // Delete receiving inventory
+            for (const receiving of receivingInventories) {
+              await supabase
+                .from('inventory_locations')
+                .delete()
+                .eq('id', (receiving as any).id)
+            }
+
+            // Create FBA inventory with detailed delivery notes
+            const actualFullyReceivedDate = data?.fully_received_date || fully_received_date || new Date().toISOString().split('T')[0]
+            const deliveryDate = new Date(actualFullyReceivedDate).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'short',
               day: 'numeric'
@@ -145,7 +194,7 @@ export async function PATCH(
               unit_cost: unitCost,
               unit_shipping_cost: unitShippingCost,
               po_id: null,
-              notes: `Delivered to FBA on ${deliveryDate} - Shipment ${invoice.invoice_number} (${item.quantity} units)`
+              notes: `Fully received at FBA on ${deliveryDate} - Shipment ${invoice.invoice_number} (${item.quantity} units)`
             })
           }
         }

@@ -557,11 +557,18 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
                     <strong>{storageInventory.length} product(s)</strong> available for shipment:
                   </p>
                   <ul className="text-xs text-blue-700 space-y-1">
-                    {storageInventory.slice(0, 5).map((inv) => (
-                      <li key={inv.product_id}>
-                        • {inv.product_asin ? `${inv.product_asin} | ` : ''}{inv.product_sku} | {inv.product_name}: <strong>{inv.total_available} units</strong>
-                      </li>
-                    ))}
+                    {storageInventory.slice(0, 5).map((inv) => {
+                      const maxNameLength = 60
+                      const truncatedName = inv.product_name.length > maxNameLength
+                        ? inv.product_name.substring(0, maxNameLength) + '...'
+                        : inv.product_name
+
+                      return (
+                        <li key={inv.product_id}>
+                          • {inv.product_asin ? `${inv.product_asin} | ` : ''}{inv.product_sku} | {truncatedName}: <strong>{inv.total_available} units</strong>
+                        </li>
+                      )
+                    })}
                     {storageInventory.length > 5 && (
                       <li>... and {storageInventory.length - 5} more</li>
                     )}

@@ -85,6 +85,25 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
   const [storageInventory, setStorageInventory] = useState<StorageInventory[]>([])
   const [lineItems, setLineItems] = useState<LineItem[]>([])
 
+  // Load existing line items when editing
+  useEffect(() => {
+    if (shippingInvoice && shippingInvoice.shipping_line_items) {
+      const existingItems: LineItem[] = shippingInvoice.shipping_line_items.map(item => {
+        const product = products.find(p => p.id === item.product_id)
+        const chargeableWeight = product ? calculateChargeableWeight(product) : 0
+
+        return {
+          product_id: item.product_id,
+          quantity: item.quantity,
+          available_quantity: item.quantity, // When editing, current quantity is "available"
+          unit_shipping_cost: item.unit_shipping_cost,
+          chargeable_weight: chargeableWeight,
+        }
+      })
+      setLineItems(existingItems)
+    }
+  }, [shippingInvoice])
+
   // Fetch available storage inventory
   useEffect(() => {
     const fetchStorageInventory = async () => {
@@ -551,10 +570,10 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
           )}
 
           {/* Line Items */}
-          {!shippingInvoice && (
-            <div className="border-t pt-4">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="text-md font-medium text-gray-900">Shipment Items</h4>
+          <div className="border-t pt-4">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-md font-medium text-gray-900">Shipment Items</h4>
+              {!shippingInvoice && (
                 <button
                   type="button"
                   onClick={addLineItem}
@@ -563,49 +582,91 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
                 >
                   + Add Item
                 </button>
-              </div>
+              )}
+            </div>
 
-              {lineItems.length > 0 ? (
-                <div className="space-y-2">
-                  {lineItems.map((item, index) => (
+            {lineItems.length > 0 ? (
+              <div className="space-y-2">
+                {lineItems.map((item, index) => {
+                  // For existing shipments, get product info directly
+                  const productInfo = shippingInvoice
+                    ? shippingInvoice.shipping_line_items?.find(li => li.product_id === item.product_id)?.products
+                    : null
+
+                  const storageInfo = storageInventory.find(s => s.product_id === item.product_id)
+
+                  const productDisplay = productInfo
+                    ? `${productInfo.name} (${productInfo.sku})`
+                    : storageInfo
+                      ? `${storageInfo.product_name} (${storageInfo.product_sku})`
+                      : 'Unknown Product'
+
+                  return (
                     <div key={index} className="flex gap-2 items-end bg-gray-50 p-2 rounded">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700">Product *</label>
-                        <select
-                          value={item.product_id}
-                          onChange={(e) => updateLineItem(index, 'product_id', e.target.value)}
-                          required
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                        >
-                          <option value="">Select product</option>
-                          {storageInventory.map((inv) => (
-                            <option key={inv.product_id} value={inv.product_id}>
-                              {inv.product_name} ({inv.product_sku}) - {inv.total_available} available
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="w-24">
-                        <label className="block text-xs font-medium text-gray-700">Available</label>
-                        <input
-                          type="text"
-                          disabled
-                          value={item.available_quantity}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-white text-gray-900 text-sm"
-                        />
-                      </div>
-                      <div className="w-24">
-                        <label className="block text-xs font-medium text-gray-700">Quantity *</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max={item.available_quantity}
-                          value={item.quantity || ''}
-                          onChange={(e) => updateLineItem(index, 'quantity', parseInt(e.target.value) || 0)}
-                          required
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                        />
-                      </div>
+                      {shippingInvoice ? (
+                        // Read-only view for existing shipments
+                        <>
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-gray-700">Product</label>
+                            <input
+                              type="text"
+                              disabled
+                              value={productDisplay}
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-100 text-gray-700 text-sm"
+                            />
+                          </div>
+                          <div className="w-24">
+                            <label className="block text-xs font-medium text-gray-700">Quantity</label>
+                            <input
+                              type="text"
+                              disabled
+                              value={item.quantity}
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-100 text-gray-700 text-sm"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        // Editable view for new shipments
+                        <>
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-gray-700">Product *</label>
+                            <select
+                              value={item.product_id}
+                              onChange={(e) => updateLineItem(index, 'product_id', e.target.value)}
+                              required
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                            >
+                              <option value="">Select product</option>
+                              {storageInventory.map((inv) => (
+                                <option key={inv.product_id} value={inv.product_id}>
+                                  {inv.product_name} ({inv.product_sku}) - {inv.total_available} available
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="w-24">
+                            <label className="block text-xs font-medium text-gray-700">Available</label>
+                            <input
+                              type="text"
+                              disabled
+                              value={item.available_quantity}
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-white text-gray-900 text-sm"
+                            />
+                          </div>
+                          <div className="w-24">
+                            <label className="block text-xs font-medium text-gray-700">Quantity *</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max={item.available_quantity}
+                              value={item.quantity || ''}
+                              onChange={(e) => updateLineItem(index, 'quantity', parseInt(e.target.value) || 0)}
+                              required
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                            />
+                          </div>
+                        </>
+                      )}
                       <div className="w-28">
                         <label className="block text-xs font-medium text-gray-700">Chg. Wt/Unit</label>
                         <input
@@ -633,23 +694,25 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
                           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-white text-gray-900 text-sm"
                         />
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeLineItem(index)}
-                        className="px-2 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
-                      >
-                        Remove
-                      </button>
+                      {!shippingInvoice && (
+                        <button
+                          type="button"
+                          onClick={() => removeLineItem(index)}
+                          className="px-2 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
-                  ))}
+                  )
+                })}
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 text-center py-4">
-                  Click "Add Item" to add products to this shipment
+                  {shippingInvoice ? 'No line items found' : 'Click "Add Item" to add products to this shipment'}
                 </p>
               )}
-            </div>
-          )}
+          </div>
 
           <div className="bg-gray-50 border border-gray-300 rounded-md p-4">
             <div className="text-sm space-y-1">

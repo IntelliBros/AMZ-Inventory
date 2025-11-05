@@ -65,50 +65,53 @@ Complete restructure from warehouse snapshot-based sales calculations to direct 
 
 ---
 
-### 🔄 Phase 2: Sales Snapshots System (IN PROGRESS)
+### ✅ Phase 2: Sales Snapshots System (COMPLETED - API)
 
-#### ⬜ 2.1 Sales Snapshot API Routes
-- [ ] Create /app/api/sales-snapshots/route.ts
-  - [ ] GET: List all sales snapshots for current team
-    - [ ] Filter by date range (optional)
-    - [ ] Group by period (optional)
-    - [ ] Include product details
-  - [ ] POST: Create new sales snapshot
-    - [ ] Validate team access
-    - [ ] Check for duplicate (team + product + period)
-    - [ ] Validate sufficient inventory exists
-    - [ ] Create snapshot record
-    - [ ] Call FIFO inventory removal function
+#### ✅ 2.1 Sales Snapshot API Routes
+- [x] Create /app/api/sales-snapshots/route.ts
+  - [x] GET: List all sales snapshots for current team
+    - [x] Filter by date range (optional)
+    - [x] Include product details
+  - [x] POST: Create new sales snapshot
+    - [x] Validate team access
+    - [x] Check for duplicate (team + product + period)
+    - [x] Validate sufficient inventory exists
+    - [x] Create snapshot record
+    - [x] Call FIFO inventory removal function
 
-- [ ] Create /app/api/sales-snapshots/[id]/route.ts
-  - [ ] GET: Get specific snapshot with details
-  - [ ] DELETE: Delete snapshot
-    - [ ] Check team permissions
-    - [ ] Restore inventory (reverse FIFO removal)
-    - [ ] Delete record
+- [x] Create /app/api/sales-snapshots/[id]/route.ts
+  - [x] GET: Get specific snapshot with details
+  - [x] DELETE: Delete snapshot
+    - [x] Check team permissions
+    - [x] Restore inventory (reverse FIFO removal)
+    - [x] Delete record
 
-- [ ] Create /app/api/sales-snapshots/import-csv/route.ts
-  - [ ] POST: Bulk import from CSV
-    - [ ] Parse CSV data
-    - [ ] Validate all products exist
-    - [ ] Validate sufficient inventory
-    - [ ] Create snapshots in transaction
-    - [ ] Apply FIFO removal for all
-    - [ ] Return summary (success/errors)
+- [x] Create /app/api/sales-snapshots/import-csv/route.ts
+  - [x] POST: Bulk import from CSV
+    - [x] Parse CSV data
+    - [x] Validate all products exist
+    - [x] Validate sufficient inventory
+    - [x] Create snapshots individually
+    - [x] Apply FIFO removal for each
+    - [x] Return summary (success/errors)
 
-#### ⬜ 2.2 FIFO Sales Inventory Removal
-- [ ] Create /lib/fifo-inventory.ts utility
-  - [ ] Function: removeSalesFromInventory(productId, quantity, teamId, saleDate)
-    - [ ] Query FBA inventory for product (order by created_at ASC)
-    - [ ] If insufficient FBA, take from receiving (order by created_at ASC)
-    - [ ] Consume inventory FIFO (delete or reduce quantities)
-    - [ ] Create inventory_history records
-    - [ ] Return consumed inventory details
+#### ✅ 2.2 FIFO Sales Inventory Removal
+- [x] Create /lib/fifo-inventory.ts utility
+  - [x] Function: removeSalesFromInventory(productId, quantity, teamId, saleDate)
+    - [x] Query FBA inventory for product (order by created_at ASC)
+    - [x] If insufficient FBA, take from receiving (order by created_at ASC)
+    - [x] Consume inventory FIFO (delete or reduce quantities)
+    - [x] Create inventory_history records
+    - [x] Return consumed inventory details
 
-  - [ ] Function: restoreSalesInventory(productId, quantity, teamId, originalInventory)
-    - [ ] Recreate inventory records that were consumed
-    - [ ] Used when deleting sales snapshots
-    - [ ] Maintain historical accuracy
+  - [x] Function: restoreSalesInventory(productId, quantity, teamId, originalInventory)
+    - [x] Recreate inventory records that were consumed
+    - [x] Used when deleting sales snapshots
+    - [x] Maintain historical accuracy
+
+  - [x] Function: checkInventoryAvailability(productId, quantity, teamId)
+    - [x] Check FBA and Receiving totals
+    - [x] Return availability status
 
 #### ⬜ 2.3 Sales Import Page
 - [ ] Create /app/sales-import/page.tsx
@@ -336,9 +339,9 @@ DEF456,30,750.00
 
 **Last Updated:** 2025-11-05
 
-**Phase:** 1 (Complete), Starting Phase 2
+**Phase:** 2 (Complete - API), Starting UI work (Phase 2.3 and Phase 3)
 
-**Next Task:** Create Sales Snapshot API Routes (2.1)
+**Next Task:** Create Sales Import Page (2.3)
 
 **Blockers:** None
 

@@ -20,7 +20,7 @@ type ShippingInvoice = Database['public']['Tables']['shipping_invoices']['Row'] 
   }>
 }
 
-type ShipmentStatus = 'pending' | 'in_transit' | 'receiving' | 'delivered'
+type ShipmentStatus = 'pending' | 'in_transit' | 'receiving' | 'delivered' | 'complete'
 
 interface Product {
   id: string
@@ -61,6 +61,7 @@ const shipmentStatuses: { value: ShipmentStatus; label: string }[] = [
   { value: 'in_transit', label: 'In Transit' },
   { value: 'receiving', label: 'Receiving' },
   { value: 'delivered', label: 'Delivered' },
+  { value: 'complete', label: 'Complete' },
 ]
 
 export default function ShippingInvoiceModal({ shippingInvoice, products, onClose }: ShippingInvoiceModalProps) {
@@ -88,6 +89,24 @@ export default function ShippingInvoiceModal({ shippingInvoice, products, onClos
 
   const [storageInventory, setStorageInventory] = useState<StorageInventory[]>([])
   const [lineItems, setLineItems] = useState<LineItem[]>([])
+
+  // Auto-populate dates when status changes
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0]
+
+    // Auto-populate first_received_date when status changes to 'receiving'
+    if (formData.status === 'receiving' && previousStatus !== 'receiving' && !formData.first_received_date) {
+      setFormData(prev => ({ ...prev, first_received_date: today }))
+    }
+
+    // Auto-populate fully_received_date when status changes to 'delivered'
+    if (formData.status === 'delivered' && previousStatus !== 'delivered' && !formData.fully_received_date) {
+      setFormData(prev => ({ ...prev, fully_received_date: today }))
+    }
+
+    // Update previous status
+    setPreviousStatus(formData.status)
+  }, [formData.status])
 
   // Load existing line items when editing
   useEffect(() => {

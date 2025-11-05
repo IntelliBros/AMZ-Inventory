@@ -76,10 +76,17 @@ export async function PATCH(
       fully_received_date?: string | null
     } = { status }
 
-    if (first_received_date !== undefined) {
+    // Auto-populate first_received_date if not provided when marking as receiving
+    if (status === 'receiving' && first_received_date === undefined) {
+      updateData.first_received_date = new Date().toISOString().split('T')[0]
+    } else if (first_received_date !== undefined) {
       updateData.first_received_date = first_received_date
     }
-    if (fully_received_date !== undefined) {
+
+    // Auto-populate fully_received_date if not provided when marking as delivered
+    if (status === 'delivered' && fully_received_date === undefined) {
+      updateData.fully_received_date = new Date().toISOString().split('T')[0]
+    } else if (fully_received_date !== undefined) {
       updateData.fully_received_date = fully_received_date
     }
 

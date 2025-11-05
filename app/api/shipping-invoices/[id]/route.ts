@@ -121,9 +121,14 @@ export async function PATCH(
               }
             }
 
-            // Create FBA inventory
+            // Create FBA inventory with detailed delivery notes
             const unitCost = (enRouteInventories[0] as any)?.unit_cost || 0
             const unitShippingCost = (enRouteInventories[0] as any)?.unit_shipping_cost || 0
+            const deliveryDate = new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            })
 
             await (supabase as any).from('inventory_locations').insert({
               product_id: item.product_id,
@@ -132,7 +137,7 @@ export async function PATCH(
               unit_cost: unitCost,
               unit_shipping_cost: unitShippingCost,
               po_id: null,
-              notes: `Delivered: Shipment ${invoice.invoice_number}`
+              notes: `Delivered to FBA on ${deliveryDate} - Shipment ${invoice.invoice_number} (${item.quantity} units)`
             })
           }
         }

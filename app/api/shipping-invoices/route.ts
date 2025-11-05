@@ -150,8 +150,13 @@ export async function POST(request: NextRequest) {
 
           // Get the product's unit cost from the first storage record
           const unitCost = (storageInventories[0] as any)?.unit_cost || 0
+          const shipmentDate = new Date(shipping_date).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          })
 
-          // Create en_route inventory
+          // Create en_route inventory with detailed shipping notes
           const { error: enRouteError } = await (supabase as any).from('inventory_locations').insert({
             product_id: item.product_id,
             location_type: 'en_route',
@@ -159,7 +164,7 @@ export async function POST(request: NextRequest) {
             unit_cost: unitCost,
             unit_shipping_cost: item.unit_shipping_cost,
             po_id: null,
-            notes: `Shipment ${invoice_number}`
+            notes: `Shipped on ${shipmentDate} - Shipment ${invoice_number} via ${carrier} (${item.quantity} units)`
           })
 
           if (enRouteError) {

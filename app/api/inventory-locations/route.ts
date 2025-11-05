@@ -37,8 +37,7 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient()
 
     // Get all products that belong to current team
-    // @ts-ignore
-    const { data: accessibleProducts } = await supabase
+    const { data: accessibleProducts } = await (supabase as any)
       .from('products')
       .select('id')
       .eq('team_id', currentTeamId)
@@ -48,20 +47,17 @@ export async function GET(request: NextRequest) {
     // Build query - filter by accessible products
     let query = supabase
       .from('inventory_locations')
-      .select('*, products(id, sku, name)')
+      .select('*, products(id, sku, name, asin)')
       .in('product_id', productIds)
 
     if (locationType) {
-      // @ts-ignore
       query = query.eq('location_type', locationType)
     }
 
     if (productId) {
-      // @ts-ignore
       query = query.eq('product_id', productId)
     }
 
-    // @ts-ignore
     const { data, error } = await query
 
     if (error) {
@@ -145,10 +141,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // @ts-ignore - Supabase types don't recognize inventory_locations table
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('inventory_locations')
-      // @ts-ignore - Supabase types don't recognize inventory_locations table
       .insert(locations)
       .select()
 
